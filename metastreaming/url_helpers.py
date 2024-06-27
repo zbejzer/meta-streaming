@@ -16,6 +16,9 @@ def parse_deezer_url(url):
     return None
 
 
-def deezer_api_url(service, id):
+def deezer_api_url(service: str, id: str, parameters: str = None):
     # https://api.deezer.com/version/service/id/method/?parameters
-    return "{}/{}/{}".format(DEEZER_API_URL, service, id)
+    if parameters is None:
+        return "{}/{}/{}".format(DEEZER_API_URL, service, id)
+    else:
+        return "{}/{}/{}{}".format(DEEZER_API_URL, service, id, parameters)

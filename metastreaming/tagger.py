@@ -1,5 +1,6 @@
 import json
 import os
+import pprint
 import sys
 import re
 import urllib.request
@@ -7,9 +8,11 @@ from mutagen.flac import FLAC
 from mutagen import MutagenError
 
 from metastreaming.url_helpers import deezer_api_url, parse_deezer_url
+from metastreaming.web_helper import get_json_by_url
 
 
 def apply_track_tags(album_metadata, track_metadata, file: os.DirEntry):
+    print("Deezer track name: " + track_metadata["title"])
     ALBUM_TAGS = {
         "title": "ALBUM",
         "upc": "UPC",
@@ -53,24 +56,22 @@ def apply_track_tags(album_metadata, track_metadata, file: os.DirEntry):
         sys.exit(1)
 
 
-def tag_file(album_metadata, file: os.DirEntry):
-    id = int(re.search("^\\d+(?= - )", file.name)[0]) - 1
+def tag_file(album_metadata, tracks, file: os.DirEntry):
     print("Processing file: " + file.name)
-    track_info = parse_deezer_url(album_metadata["tracks"]["data"][id]["link"])
+    audio = FLAC(filename=file.path)
+    disk_number = int(audio["DISCNUMBER"][0])
+    track_number = int(audio["TRACKNUMBER"][0])
+    track_index = track_number - 1
 
-    try:
-        response = urllib.request.urlopen(
-            url=deezer_api_url("track", track_info["id"])
-        ).read()
-        track_metadata = json.loads(response)
-    except urllib.error.URLError as e:
-        print("Error occurred while fetching track")
-        print("Reason: ", e.reason)
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        print("Invalid JSON syntax: ", e)
-        sys.exit(1)
-    except:
-        print("Unknown error occurred")
-        sys.exit(1)
+    if not disk_number == None:
+        for i in range(0, int(album_metadata["nb_tracks"])):
+            if (
+                int(tracks["data"][i]["track_position"]) == track_number
+                and int(tracks["data"][i]["disk_number"]) == disk_number
+            ):
+                track_index = i
+                break
+
+    track_id = tracks["data"][track_index]["id"]
+    track_metadata = get_json_by_url(deezer_api_url("track", track_id))
     apply_track_tags(album_metadata, track_metadata, file)
