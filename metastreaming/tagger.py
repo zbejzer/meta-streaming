@@ -1,9 +1,10 @@
 import json
 import os
-from pprint import pprint
+import sys
 import re
 import urllib.request
 from mutagen.flac import FLAC
+from mutagen import MutagenError
 
 from metastreaming.url_helpers import deezer_api_url, parse_deezer_url
 
@@ -44,14 +45,32 @@ def apply_track_tags(album_metadata, track_metadata, file: os.DirEntry):
     for tag in TRACK_TAGS:
         if tag in track_metadata:
             audio[TRACK_TAGS[tag]] = str(track_metadata[tag])
-    audio.save()
+    try:
+        audio.save()
+    except MutagenError as e:
+        print("Error occurred while saving track")
+        print(e)
+        sys.exit(1)
 
 
 def tag_file(album_metadata, file: os.DirEntry):
     id = int(re.search("^\\d+(?= - )", file.name)[0]) - 1
     print("Processing file: " + file.name)
     track_info = parse_deezer_url(album_metadata["tracks"]["data"][id]["link"])
-    track_metadata = json.loads(
-        urllib.request.urlopen(url=deezer_api_url("track", track_info["id"])).read()
-    )
+
+    try:
+        response = urllib.request.urlopen(
+            url=deezer_api_url("track", track_info["id"])
+        ).read()
+        track_metadata = json.loads(response)
+    except urllib.error.URLError as e:
+        print("Error occurred while fetching track")
+        print("Reason: ", e.reason)
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print("Invalid JSON syntax: ", e)
+        sys.exit(1)
+    except:
+        print("Unknown error occurred")
+        sys.exit(1)
     apply_track_tags(album_metadata, track_metadata, file)

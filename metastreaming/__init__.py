@@ -33,15 +33,21 @@ def main():
         album = json.loads(response)
     except urllib.error.URLError as e:
         print("Error occurred while fetching album")
-        print("Reason: " + e.reason)
+        print("Reason: ", e.reason)
         sys.exit(1)
     except json.JSONDecodeError as e:
         print("Invalid JSON syntax: ", e)
         sys.exit(1)
+    except:
+        print("Unknown error occurred")
+        sys.exit(1)
 
     print("Title of the provided album: " + album["title"])
-    confirm = input("Do you want to continue? [Y/n] ")
-    if not (confirm == "" or confirm.lower == "y"):
+    try:
+        confirm = input("Do you want to continue? [Y/n] ")
+        if not (confirm == "" or confirm.lower == "y"):
+            raise
+    except:
         print("Canceled by user")
         sys.exit(1)
 
