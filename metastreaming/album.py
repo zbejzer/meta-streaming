@@ -1,8 +1,16 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import IntEnum
+
+
+class Item(ABC):
+    @abstractmethod
+    def print(self) -> None:
+        pass
 
 
 @dataclass
-class Track:
+class Track(Item):
     title: str | None = field(default=None)
     isrc: str | None = field(default=None)
     release_date: str | None = field(default=None)
@@ -17,7 +25,7 @@ class Track:
 
 
 @dataclass
-class Album:
+class Album(Item):
     title: str | None = field(default=None)
     upc: str | None = field(default=None)
     label: str | None = field(default=None)
@@ -26,7 +34,6 @@ class Album:
     tracks: list[Track] = field(default_factory=list)
 
     def print(self) -> None:
-        print(self.title)
-        print("; ".join(self.artist))
+        print("{} - {}".format("; ".join(self.artist), self.title))
         for track in self.tracks:
-            print("{}\\".format(track.title) + "; ".join(track.artist))
+            print("{}\\{}".format(track.title, "; ".join(track.artist)))

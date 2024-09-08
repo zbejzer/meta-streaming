@@ -14,13 +14,13 @@ class WebHelper(ABC):
     def __init__(self):
         self.data: Album | Track = None
 
-    def get_data(self, url: str) -> None:
+    def get_data(self, url: str) -> Album | Track:
         """Get data from URL and parse it into either Album or Track object"""
         url_args = self._parse_url(url)
         self._create_data_object(url_args)
         api_url = self._create_api_url(url_args)
         raw_data = self._get_data_from_api(api_url)
-        self._parse_raw_data(raw_data)
+        return self._parse_raw_data(raw_data)
 
     def _parse_url(self, url: str) -> dict[str, Any]:
         """Extract parameters from a streaming service URL"""
@@ -90,7 +90,7 @@ class DeezerWebHelper(WebHelper):
 
     def _parse_track(self, raw_data: Any):
         # Dictionary where key is the name on deezer, and value name in code
-        TRACK_TAGS = {
+        TRANSLATION_TABLE = {
             "title": "title",
             "isrc": "isrc",
             "release_date": "release_date",
@@ -103,13 +103,13 @@ class DeezerWebHelper(WebHelper):
         if "contributors" in raw_data and len(raw_data["contributors"]) > 0:
             for contributor in raw_data["contributors"]:
                 self.data.artist.append(contributor["name"])
-        for tag in TRACK_TAGS:
+        for tag in TRANSLATION_TABLE:
             if tag in raw_data:
-                setattr(self.data, TRACK_TAGS[tag], raw_data[tag])
+                setattr(self.data, TRANSLATION_TABLE[tag], raw_data[tag])
 
     def _parse_album(self, raw_data: Any):
         # Dictionary where key is the name on deezer, and value name in code
-        ALBUM_TAGS = {
+        TRANSLATION_TABLE = {
             "title": "title",
             "upc": "upc",
             "label": "label",
@@ -119,9 +119,9 @@ class DeezerWebHelper(WebHelper):
         if "contributors" in raw_data and len(raw_data["contributors"]) > 0:
             for contributor in raw_data["contributors"]:
                 self.data.artist.append(contributor["name"])
-        for tag in ALBUM_TAGS:
+        for tag in TRANSLATION_TABLE:
             if tag in raw_data:
-                setattr(self.data, ALBUM_TAGS[tag], raw_data[tag])
+                setattr(self.data, TRANSLATION_TABLE[tag], raw_data[tag])
         for track in raw_data["tracks"]["data"]:
             track_web_helper = DeezerWebHelper()
             track_web_helper.get_data(track["link"])
