@@ -45,7 +45,7 @@ class DeezerAPIHelper(APIHelper):
             filters["q"] = query
 
         return self.get(
-            f"/search",
+            f"/search/album",
             handler,
             unencoded_queryargs=filters,
             priority=True,
