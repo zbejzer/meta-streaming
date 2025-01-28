@@ -5,6 +5,8 @@ from PyQt5.QtCore import QUrl
 from picard.config import get_config
 from picard.webservice.api_helpers import APIHelper
 
+from picard.plugins.metastreaming.const import DEEZERAPI_URL
+
 
 def escape_deezer_query(text):
     # FIXME: actually ensure a proper query. It's just a placeholder really
@@ -23,7 +25,7 @@ class DeezerAPIHelper(APIHelper):
     @property
     def base_url(self):
         # FIXME: Make configurable
-        return QUrl("https://api.deezer.com")
+        return QUrl(DEEZERAPI_URL)
 
     def find(self, handler, **kwargs):
         filters = {}

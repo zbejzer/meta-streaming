@@ -1,3 +1,4 @@
+from functools import partial
 from PyQt5 import (
     QtCore,
     QtGui,
@@ -20,6 +21,7 @@ from picard.ui.searchdialog.album import AlbumSearchDialog, CoverCell
 from picard.ui.searchdialog import Retry, SearchDialog
 from picard.util import countries_shortlist
 
+from picard.plugins.metastreaming.const import DEEZERAPI_URL
 from picard.plugins.metastreaming.api_helpers import build_deezer_query, DeezerAPIHelper
 from picard.plugins.metastreaming.deezerjson import albumsearch_to_metadata
 
@@ -112,8 +114,37 @@ class StreamingAlbumSearchDialog(SearchDialog):
         self.fetching = False
 
     def fetch_coverart(self, cell):
-        # FIXME: implement cover art fetching
-        return
+        """Queue cover art from Deezer server for each album in search
+        results.
+        """
+        if cell.fetched:
+            return
+        if not cell.is_visible():
+            return
+        cell.fetched = True
+        deezerid = cell.release["deezer_albumid"]
+        cell.fetch_task = self.tagger.webservice.download_url(
+            url=f"{DEEZERAPI_URL}/album/{deezerid}/image?size=medium",
+            handler=partial(self._cover_downloaded, cell),
+        )
+
+    def _cover_downloaded(self, cover_cell, data, http, error):
+        """Handle cover art query reply from Deezer server.
+        If server returns the cover image successfully, update the cover art
+        cell of particular release.
+        """
+        cover_cell.fetch_task = None
+
+        if error:
+            cover_cell.not_found()
+        else:
+            pixmap = QtGui.QPixmap()
+            try:
+                pixmap.loadFromData(data)
+                cover_cell.set_pixmap(pixmap)
+            except Exception as e:
+                cover_cell.not_found()
+                log.error(e)
 
     def fetch_cleanup(self):
         for cell in self.cover_cells:
