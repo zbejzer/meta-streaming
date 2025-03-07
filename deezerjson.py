@@ -2,13 +2,14 @@ from picard.config import get_config
 from picard.mbjson import _node_skip_empty_iter
 from picard.metadata import Metadata
 
-_ALBUM_TO_METADATA = {"title": "album", "nb_tracks": "tracks"}
+_ALBUM_TO_METADATA: dict[str, str] = {"title": "album", "nb_tracks": "tracks"}
 
 
 def albumsearch_to_metadata(node, m: Metadata, album=None):
-    """Make metadata dict from a JSON 'album' node returned by search."""
+    """Make metadata dict from a Deezer JSON 'album' node returned by search."""
     config = get_config()
     m.add_unique("deezer_albumid", node["id"])
+    m["source"] = "Deezer"
     for key, value in _node_skip_empty_iter(node):
         if key in _ALBUM_TO_METADATA:
             m[_ALBUM_TO_METADATA[key]] = value

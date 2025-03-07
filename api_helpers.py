@@ -22,10 +22,9 @@ def build_deezer_query(args):
 
 
 class DeezerAPIHelper(APIHelper):
-    @property
-    def base_url(self):
-        # FIXME: Make configurable
-        return QUrl(DEEZERAPI_URL)
+    # TODO: Make configurable
+    def __init__(self, webservice):
+        super().__init__(webservice, DEEZERAPI_URL)
 
     def find(self, handler, **kwargs):
         filters = {}

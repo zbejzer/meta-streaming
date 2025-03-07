@@ -21,6 +21,20 @@
 # [2025-01-21] Complete rework
 
 
+from typing import cast
+
+from PyQt5 import QtCore
+
+from picard.plugins.metastreaming.api_helpers import DeezerAPIHelper
+from picard.tagger import Tagger
+from picard.ui.itemviews import BaseAction, register_cluster_action
+from picard.cluster import Cluster
+from picard.album import Album
+from picard import log
+
+from picard.plugins.metastreaming.albumsearch import StreamingAlbumSearchDialog
+from picard.plugins.metastreaming.album import load_from_deezer
+
 PLUGIN_NAME = "Streaming Metadata"
 PLUGIN_AUTHOR = "Stanisław Borodziuk"
 PLUGIN_DESCRIPTION = "Get metadata from streaming services"
@@ -29,28 +43,18 @@ PLUGIN_API_VERSIONS = ["2.0", "2.1", "2.2"]
 PLUGIN_LICENSE = "GPL-3.0-or-later"
 PLUGIN_LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
 
-# from PyQt5 import QtCore
-# from picard import log, config
-# from picard.config import Option, get_config
-# from picard.album import Album
-# from picard.ui.options import OptionsPage, register_options_page
-# from picard.ui.searchdialog import Retry, SearchDialog
-# from picard.plugins.metastreaming.ui_options_streaming_metadata import (
-#     Ui_StreamingMetadataOptionsPage,
-# )
-
-from picard import log
-from picard.cluster import Cluster
-from picard.ui.itemviews import BaseAction, register_cluster_action
-from picard.plugins.metastreaming.albumsearch import StreamingAlbumSearchDialog
-
 
 class GetMetaStreaming(BaseAction):
     NAME = "Get metadata from streamings"
 
-    def callback(self, objs):
-        log.debug("MetaStreaming BaseAction executed")
+    # technically redundant because class inherits after QObject and tagger is added to it dynamically
+    # during tagger init, but explicitly creating it can't hurt
+    tagger: Tagger | None = None
 
+    def callback(self, objs):
+        assert isinstance(self.tagger, Tagger)
+
+        # redundant check for now, but keeping it for the possible future use
         if isinstance(objs[0], Cluster):
             dialog = StreamingAlbumSearchDialog(
                 self.tagger.window, force_advanced_search=True
@@ -61,5 +65,14 @@ class GetMetaStreaming(BaseAction):
         else:
             log.debug("GetMetaStreaming expected a Cluster, got %r", objs[0])
             return
+
+
+GetMetaStreaming.tagger = QtCore.QObject.tagger
+
+deezer_api = DeezerAPIHelper(QtCore.QObject.tagger.webservice)
+
+# FIXME: awful, awful way to do this but I don't care enough to do it better
+setattr(Album, load_from_deezer.__name__, load_from_deezer)
+setattr(Tagger, 'deezer_api', deezer_api)
 
 register_cluster_action(GetMetaStreaming())

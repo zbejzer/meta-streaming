@@ -1,27 +1,23 @@
 from functools import partial
+import uuid
+
 from PyQt5 import (
     QtCore,
     QtGui,
-    QtWidgets,
 )
 
 from picard import log
-from picard.config import (
-    Option,
-    get_config,
-)
-from picard.mbjson import (
-    countries_from_node,
-    media_formats_from_node,
-    release_group_to_metadata,
-    release_to_metadata,
-)
+from picard.album import Album
+from picard.config import Option
 from picard.metadata import Metadata
-from picard.ui.searchdialog.album import AlbumSearchDialog, CoverCell
+from picard.ui.searchdialog.album import CoverCell
 from picard.ui.searchdialog import Retry, SearchDialog
-from picard.util import countries_shortlist
 
-from picard.plugins.metastreaming.const import DEEZERAPI_URL
+from picard.plugins.metastreaming.const import (
+    DEEZER_RELASE_NAMESPACE_IDENTIFIER,
+    DEEZER_RELASEGROUP_NAMESPACE_IDENTIFIER,
+    DEEZERAPI_URL,
+)
 from picard.plugins.metastreaming.api_helpers import build_deezer_query, DeezerAPIHelper
 from picard.plugins.metastreaming.deezerjson import albumsearch_to_metadata
 
@@ -46,6 +42,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
             ("name", _("Name")),
             ("artist", _("Artist")),
             ("tracks", _("Tracks")),
+            ("source", _("Source")),
             ("id", _("ID")),
             ("cover", _("Cover")),
         ]
@@ -58,8 +55,8 @@ class StreamingAlbumSearchDialog(SearchDialog):
         self.retry_params = Retry(self.search, text)
         self.search_box_text(text)
         self.show_progress()
-        self.deezer_api = DeezerAPIHelper(self.tagger.webservice)
-        self.deezer_api.find(
+        assert isinstance(self.tagger.deezer_api, DeezerAPIHelper)
+        self.tagger.deezer_api.find(
             self.handle_reply,
             query=text,
             search=True,
@@ -151,7 +148,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
             if cell.fetch_task is not None:
                 log.debug(
                     "Removing cover art fetch task for %s",
-                    cell.release["musicbrainz_albumid"],
+                    cell.release["deezer_albumid"],
                 )
                 self.tagger.webservice.remove_task(cell.fetch_task)
 
@@ -175,6 +172,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
             self.set_table_item(row, "name", release, "album")
             self.set_table_item(row, "artist", release, "albumartist")
             self.set_table_item(row, "tracks", release, "tracks")
+            self.set_table_item(row, "source", release, "source")
             self.set_table_item(row, "id", release, "deezer_albumid")
             self.cover_cells.append(
                 CoverCell(self.table, release, row, column, on_show=self.fetch_coverart)
@@ -186,16 +184,43 @@ class StreamingAlbumSearchDialog(SearchDialog):
             self.load_selection(row)
 
     def load_selection(self, row):
-        return
-        # release = self.search_results[row]
-        # release_mbid = release['musicbrainz_albumid']
-        # if self.existing_album:
-        #     self.existing_album.switch_release_version(release_mbid)
-        # else:
-        #     self.tagger.get_release_group_by_id(
-        #         release['musicbrainz_releasegroupid']).loaded_albums.add(
-        #             release_mbid)
-        #     album = self.tagger.load_album(release_mbid)
-        #     if self.cluster:
-        #         files = self.cluster.iterfiles()
-        #         self.tagger.move_files_to_album(files, release_mbid, album)
+        # TODO: make it work
+        release = self.search_results[row]
+        # generating IDs due to not being associated with any actual MB release
+        release_mbid = uuid.uuid3(
+            DEEZER_RELASE_NAMESPACE_IDENTIFIER, release["deezer_albumid"]
+        )
+        releasegroup_id = uuid.uuid3(
+            DEEZER_RELASEGROUP_NAMESPACE_IDENTIFIER, release["deezer_albumid"]
+        )
+        if self.existing_album:
+            # No need to implement for now as StreamingAlbumSearchDialog can only be invoked for Clusters
+            # self.existing_album.switch_release_version(release_mbid)
+            raise NotImplementedError
+        else:
+            try:
+                album = Album(release_mbid)
+                album.load_from_deezer()
+            except AttributeError as e:
+                log.error(e)
+                return
+
+            # self.tagger.get_release_group_by_id(releasegroup_id).loaded_albums.add(
+            #     release_mbid
+            # )
+            # # album = self._load_deezer_album(release_mbid)
+            # if self.cluster:
+            #     files = self.cluster.iterfiles()
+            #     self.tagger.move_files_to_album(files, release_mbid, album)
+
+    def _load_deezer_album(self, album_id, discid=None):
+        """Replacement for tagger function"""
+        album: Album = self.tagger.albums.get(album_id)
+        if album:
+            log.debug("Album %s already loaded.", album_id)
+            return album
+        album = Album(album_id, discid=discid)
+        self.albums[album_id] = album
+        self.album_added.emit(album)
+        album.load()
+        return album
