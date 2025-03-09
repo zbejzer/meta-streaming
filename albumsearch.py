@@ -1,4 +1,5 @@
 from functools import partial
+from typing import cast
 import uuid
 
 from PyQt5 import (
@@ -10,14 +11,12 @@ from picard import log
 from picard.album import Album
 from picard.config import Option
 from picard.metadata import Metadata
+from picard.tagger import Tagger
 from picard.ui.searchdialog.album import CoverCell
 from picard.ui.searchdialog import Retry, SearchDialog
 
-from picard.plugins.metastreaming.const import (
-    DEEZER_RELASE_NAMESPACE_IDENTIFIER,
-    DEEZER_RELASEGROUP_NAMESPACE_IDENTIFIER,
-    DEEZERAPI_URL,
-)
+from picard.plugins.metastreaming.providers import ProviderNames, providers
+from picard.plugins.metastreaming.album import StreamingAlbum
 from picard.plugins.metastreaming.api_helpers import build_deezer_query, DeezerAPIHelper
 from picard.plugins.metastreaming.deezerjson import albumsearch_to_metadata
 
@@ -121,7 +120,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
         cell.fetched = True
         deezerid = cell.release["deezer_albumid"]
         cell.fetch_task = self.tagger.webservice.download_url(
-            url=f"{DEEZERAPI_URL}/album/{deezerid}/image?size=medium",
+            url=f"{DeezerAPIHelper.API_URL}/album/{deezerid}/image?size=medium",
             handler=partial(self._cover_downloaded, cell),
         )
 
@@ -184,43 +183,30 @@ class StreamingAlbumSearchDialog(SearchDialog):
             self.load_selection(row)
 
     def load_selection(self, row):
-        # TODO: make it work
-        release = self.search_results[row]
+        # Functionality from picard's AlbumSearchDialog.load_section
+        release: Metadata = self.search_results[row]
+        assert isinstance(release["deezer_albumid"], str)
         # generating IDs due to not being associated with any actual MB release
-        release_mbid = uuid.uuid3(
-            DEEZER_RELASE_NAMESPACE_IDENTIFIER, release["deezer_albumid"]
-        )
-        releasegroup_id = uuid.uuid3(
-            DEEZER_RELASEGROUP_NAMESPACE_IDENTIFIER, release["deezer_albumid"]
-        )
+        release_mbid = providers[ProviderNames.DEEZER].generate_release_UUID(release["deezer_albumid"])
         if self.existing_album:
             # No need to implement for now as StreamingAlbumSearchDialog can only be invoked for Clusters
             # self.existing_album.switch_release_version(release_mbid)
             raise NotImplementedError
         else:
-            try:
-                album = Album(release_mbid)
+            assert isinstance(self.tagger, Tagger)
+            self.tagger.get_release_group_by_id(
+                providers[ProviderNames.DEEZER].generate_releasegroup_UUID(release["deezer_albumid"])).loaded_albums.add(
+                release_mbid)
+            # Functionality from picard's Tagger.load_album
+            album = self.tagger.albums.get(release_mbid)
+            if album:
+                log.debug("Album %s already loaded.", release_mbid)
+            else:
+                album = StreamingAlbum(release["deezer_albumid"])
+                self.tagger.albums[release_mbid] = album
+                self.tagger.album_added.emit(album)
                 album.load_from_deezer()
-            except AttributeError as e:
-                log.error(e)
-                return
-
-            # self.tagger.get_release_group_by_id(releasegroup_id).loaded_albums.add(
-            #     release_mbid
-            # )
-            # # album = self._load_deezer_album(release_mbid)
-            # if self.cluster:
-            #     files = self.cluster.iterfiles()
-            #     self.tagger.move_files_to_album(files, release_mbid, album)
-
-    def _load_deezer_album(self, album_id, discid=None):
-        """Replacement for tagger function"""
-        album: Album = self.tagger.albums.get(album_id)
-        if album:
-            log.debug("Album %s already loaded.", album_id)
-            return album
-        album = Album(album_id, discid=discid)
-        self.albums[album_id] = album
-        self.album_added.emit(album)
-        album.load()
-        return album
+            # Functionality from picard's AlbumSearchDialog.load_section
+            if self.cluster:
+                files = self.cluster.iterfiles()
+                self.tagger.move_files_to_album(files, release_mbid, album)

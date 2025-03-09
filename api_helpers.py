@@ -1,11 +1,16 @@
+from enum import StrEnum
 import re
+from typing import Callable
 
 from PyQt5.QtCore import QUrl
 
 from picard.config import get_config
 from picard.webservice.api_helpers import APIHelper
 
-from picard.plugins.metastreaming.const import DEEZERAPI_URL
+_DEEZERAPI_URL: str = "https://api.deezer.com"
+
+
+# TODO: Join this with the Provider class or something
 
 
 def escape_deezer_query(text):
@@ -21,10 +26,20 @@ def build_deezer_query(args):
     )
 
 
+class DeezerAPIObject(StrEnum):
+    ALBUM = "album"
+    ARTIST = "artist"
+    TRACK = "track"
+
+
 class DeezerAPIHelper(APIHelper):
-    # TODO: Make configurable
+    # TODO: Make URL configurable
+    # TODO: Replace with universal class / subclass hierarchy for easier implementation of other streamings
+
+    API_URL: str = _DEEZERAPI_URL
+
     def __init__(self, webservice):
-        super().__init__(webservice, DEEZERAPI_URL)
+        super().__init__(webservice, self.API_URL)
 
     def find(self, handler, **kwargs):
         filters = {}
@@ -54,3 +69,9 @@ class DeezerAPIHelper(APIHelper):
             mblogin=False,
             refresh=False,
         )
+
+    def _get_by_id(self, entitytype, entityid, handler, **kwargs):
+        return self.get(f"/{entitytype}/{entityid}", handler, **kwargs)
+
+    def get_release_by_id(self, releaseid: str, handler: Callable, **kwargs):
+        return self._get_by_id(DeezerAPIObject.ALBUM, releaseid, handler, **kwargs)

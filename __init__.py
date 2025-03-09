@@ -33,12 +33,12 @@ from picard.album import Album
 from picard import log
 
 from picard.plugins.metastreaming.albumsearch import StreamingAlbumSearchDialog
-from picard.plugins.metastreaming.album import load_from_deezer
+from picard.plugins.metastreaming.album import StreamingAlbum
 
 PLUGIN_NAME = "Streaming Metadata"
 PLUGIN_AUTHOR = "Stanisław Borodziuk"
 PLUGIN_DESCRIPTION = "Get metadata from streaming services"
-PLUGIN_VERSION = "0.2.1"
+PLUGIN_VERSION = "0.3.0"
 PLUGIN_API_VERSIONS = ["2.0", "2.1", "2.2"]
 PLUGIN_LICENSE = "GPL-3.0-or-later"
 PLUGIN_LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
@@ -67,12 +67,13 @@ class GetMetaStreaming(BaseAction):
             return
 
 
-GetMetaStreaming.tagger = QtCore.QObject.tagger
+GetMetaStreaming.tagger = cast(Tagger, QtCore.QObject.tagger)
+StreamingAlbum.tagger = cast(Tagger, QtCore.QObject.tagger)
 
-deezer_api = DeezerAPIHelper(QtCore.QObject.tagger.webservice)
+_deezer_api: DeezerAPIHelper = DeezerAPIHelper(QtCore.QObject.tagger.webservice)
 
-# FIXME: awful, awful way to do this but I don't care enough to do it better
-setattr(Album, load_from_deezer.__name__, load_from_deezer)
-setattr(Tagger, 'deezer_api', deezer_api)
+# FIXME: awful way to do this but I don't care enough to do it better
+setattr(Tagger, 'deezer_api', _deezer_api)
 
+# TODO: Implement for albums,tracks, etc.
 register_cluster_action(GetMetaStreaming())
