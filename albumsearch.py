@@ -187,7 +187,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
         release: Metadata = self.search_results[row]
         assert isinstance(release["deezer_albumid"], str)
         # generating IDs due to not being associated with any actual MB release
-        release_mbid = providers[ProviderNames.DEEZER].generate_release_UUID(release["deezer_albumid"])
+        release_mbid = providers[ProviderNames.DEEZER].generate_release_UUID(cast(str, release["deezer_albumid"]))
         if self.existing_album:
             # No need to implement for now as StreamingAlbumSearchDialog can only be invoked for Clusters
             # self.existing_album.switch_release_version(release_mbid)
@@ -195,18 +195,18 @@ class StreamingAlbumSearchDialog(SearchDialog):
         else:
             assert isinstance(self.tagger, Tagger)
             self.tagger.get_release_group_by_id(
-                providers[ProviderNames.DEEZER].generate_releasegroup_UUID(release["deezer_albumid"])).loaded_albums.add(
+                providers[ProviderNames.DEEZER].generate_releasegroup_UUID(cast(str, release["deezer_albumid"]))).loaded_albums.add(
                 release_mbid)
             # Functionality from picard's Tagger.load_album
             album = self.tagger.albums.get(release_mbid)
             if album:
                 log.debug("Album %s already loaded.", release_mbid)
             else:
-                album = StreamingAlbum(release["deezer_albumid"])
+                album = StreamingAlbum(cast(str, release["deezer_albumid"]))
                 self.tagger.albums[release_mbid] = album
                 self.tagger.album_added.emit(album)
                 album.load_from_deezer()
-            # Functionality from picard's AlbumSearchDialog.load_section
+            # Functionality from picard's AlbumSearchDialog.load_selection
             if self.cluster:
                 files = self.cluster.iterfiles()
                 self.tagger.move_files_to_album(files, release_mbid, album)
