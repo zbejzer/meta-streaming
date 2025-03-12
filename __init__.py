@@ -33,7 +33,7 @@ from picard.album import Album
 from picard import log
 
 from picard.plugins.metastreaming.albumsearch import StreamingAlbumSearchDialog
-from picard.plugins.metastreaming.album import StreamingAlbum
+from picard.plugins.metastreaming.album import load_from_deezer
 
 PLUGIN_NAME = "Streaming Metadata"
 PLUGIN_AUTHOR = "Stanisław Borodziuk"
@@ -68,12 +68,12 @@ class GetMetaStreaming(BaseAction):
 
 
 GetMetaStreaming.tagger = cast(Tagger, QtCore.QObject.tagger)
-StreamingAlbum.tagger = cast(Tagger, QtCore.QObject.tagger)
 
 _deezer_api: DeezerAPIHelper = DeezerAPIHelper(QtCore.QObject.tagger.webservice)
 
 # FIXME: awful way to do this but I don't care enough to do it better
 setattr(Tagger, 'deezer_api', _deezer_api)
+setattr(Album, 'load_from_deezer', load_from_deezer)
 
 # TODO: Implement for albums,tracks, etc.
 register_cluster_action(GetMetaStreaming())

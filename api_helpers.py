@@ -75,3 +75,9 @@ class DeezerAPIHelper(APIHelper):
 
     def get_release_by_id(self, releaseid: str, handler: Callable, **kwargs):
         return self._get_by_id(DeezerAPIObject.ALBUM, releaseid, handler, **kwargs)
+
+    def get_track_by_id(self, trackid: str, handler: Callable, **kwargs):
+        return self._get_by_id(DeezerAPIObject.TRACK, trackid, handler, **kwargs)
+
+    def get_tracklist_by_id(self, releaseid: str, handler: Callable, **kwargs):
+        return self._get_by_id(DeezerAPIObject.ALBUM, f"{releaseid}/tracks", handler, **kwargs)

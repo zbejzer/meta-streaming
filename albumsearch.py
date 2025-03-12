@@ -15,8 +15,7 @@ from picard.tagger import Tagger
 from picard.ui.searchdialog.album import CoverCell
 from picard.ui.searchdialog import Retry, SearchDialog
 
-from picard.plugins.metastreaming.providers import ProviderNames, providers
-from picard.plugins.metastreaming.album import StreamingAlbum
+from picard.plugins.metastreaming.providers import MetadataProvider
 from picard.plugins.metastreaming.api_helpers import build_deezer_query, DeezerAPIHelper
 from picard.plugins.metastreaming.deezerjson import albumsearch_to_metadata
 
@@ -185,27 +184,27 @@ class StreamingAlbumSearchDialog(SearchDialog):
     def load_selection(self, row):
         # Functionality from picard's AlbumSearchDialog.load_section
         release: Metadata = self.search_results[row]
-        assert isinstance(release["deezer_albumid"], str)
         # generating IDs due to not being associated with any actual MB release
-        release_mbid = providers[ProviderNames.DEEZER].generate_release_UUID(cast(str, release["deezer_albumid"]))
+        provider: MetadataProvider = MetadataProvider(MetadataProvider.Names.DEEZER, str(release["deezer_albumid"]))
+        release_mbid = provider.generate_release_UUID()
+        rg_mbid = provider.generate_releasegroup_UUID()
         if self.existing_album:
             # No need to implement for now as StreamingAlbumSearchDialog can only be invoked for Clusters
             # self.existing_album.switch_release_version(release_mbid)
             raise NotImplementedError
         else:
             assert isinstance(self.tagger, Tagger)
-            self.tagger.get_release_group_by_id(
-                providers[ProviderNames.DEEZER].generate_releasegroup_UUID(cast(str, release["deezer_albumid"]))).loaded_albums.add(
-                release_mbid)
+            self.tagger.get_release_group_by_id(rg_mbid).loaded_albums.add(release_mbid)
             # Functionality from picard's Tagger.load_album
             album = self.tagger.albums.get(release_mbid)
             if album:
                 log.debug("Album %s already loaded.", release_mbid)
             else:
-                album = StreamingAlbum(cast(str, release["deezer_albumid"]))
+                album = Album(release_mbid)
                 self.tagger.albums[release_mbid] = album
                 self.tagger.album_added.emit(album)
-                album.load_from_deezer()
+                album.metastreaming_provider = provider  # pyright: ignore[reportAttributeAccessIssue]
+                album.load_from_deezer()    # FIXME: replace with a non-dynamically added function      #pyright: ignore[reportAttributeAccessIssue]
             # Functionality from picard's AlbumSearchDialog.load_selection
             if self.cluster:
                 files = self.cluster.iterfiles()
