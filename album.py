@@ -36,7 +36,7 @@ def load_from_deezer(self, priority=False, refresh=False):
 
     self.load_task = self.tagger.deezer_api.get_release_by_id(  # pyright: ignore[reportAttributeAccessIssue]
         self.metastreaming_provider.actual_id,  # pyright: ignore[reportAttributeAccessIssue]
-        partial(deezerjson.streaming_response_proxy, self),
+        partial(deezerjson.recordings_request_finished_proxy, self),
         priority=priority,
         refresh=refresh
     )

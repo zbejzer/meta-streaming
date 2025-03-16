@@ -67,8 +67,8 @@ class GetMetaStreaming(BaseAction):
             return
 
 
-GetMetaStreaming.tagger = cast(Tagger, QtCore.QObject.tagger)
-
+assert hasattr(QtCore.QObject, "tagger") and isinstance(QtCore.QObject.tagger, Tagger)
+GetMetaStreaming.tagger = QtCore.QObject.tagger
 _deezer_api: DeezerAPIHelper = DeezerAPIHelper(QtCore.QObject.tagger.webservice)
 
 # FIXME: awful way to do this but I don't care enough to do it better
