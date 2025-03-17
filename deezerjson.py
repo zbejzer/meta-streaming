@@ -1,5 +1,6 @@
 from collections import deque
 from functools import partial
+from lib2to3.pgen2.literals import evalString
 from typing import Deque, cast
 
 from picard import log
@@ -34,6 +35,14 @@ def _artist_credit_from_contributors(node: dict, provider: MetadataProvider):
     for i, c in enumerate(node):
         ac.append(dict())
         ac[i]["name"] = c["name"]
+
+        if i + 2 == len(node):
+            ac[i]["joinphrase"] = " & "
+        elif i + 1 < len(node):
+            ac[i]["joinphrase"] = ", "
+        else:
+            ac[i]["joinphrase"] = ""
+
         artist = dict()
         artist["name"] = artist["sort-name"] = c["name"]
         artist["disambiguation"] = ""
