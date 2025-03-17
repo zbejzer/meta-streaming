@@ -21,7 +21,6 @@ _ALBUM_TO_MB_RELEASE: dict[str, str] = {
     'upc': 'barcode',
     'release_date': 'date',
     'title': 'title',
-    'nb_tracks': 'title',
 }
 
 _ALBUMSEARCH_TO_METADATA: dict[str, str] = {
@@ -65,8 +64,8 @@ def _mb_track_from_track(node: dict, provider: MetadataProvider):
     track["number"] = str(node["track_position"])
     track["artist-credit"] = _artist_credit_from_contributors(node["contributors"], provider)
 
-    track["recording"]["isrcs"] = dict()
-    track["recording"]["isrcs"][0] = node["isrc"]
+    track["recording"]["isrcs"] = list()
+    track["recording"]["isrcs"].append(str(node["isrc"]))
     track["recording"]["artist-credit"] = track["artist-credit"]
 
     return track

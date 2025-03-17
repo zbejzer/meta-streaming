@@ -38,7 +38,7 @@ from picard.plugins.metastreaming.album import load_from_deezer
 PLUGIN_NAME = "Streaming Metadata"
 PLUGIN_AUTHOR = "Stanisław Borodziuk"
 PLUGIN_DESCRIPTION = "Get metadata from streaming services"
-PLUGIN_VERSION = "0.3.1"
+PLUGIN_VERSION = "0.3.2"
 PLUGIN_API_VERSIONS = ["2.0", "2.1", "2.2"]
 PLUGIN_LICENSE = "GPL-3.0-or-later"
 PLUGIN_LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
