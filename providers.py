@@ -45,11 +45,12 @@ class MetadataProvider:
     Names: ClassVar[type[Provider]] = Provider
 
     def __init__(self, provider: Provider | str, actual_id: str = "") -> None:
-        self.provider: Provider = Provider(provider) if isinstance(provider, str) else provider
+        try:
+            self.provider: Provider = Provider(provider)
+            self._root_uuid: UUID = PROVIDER_ROOT_UUIDS[self.provider]
+        except (ValueError, KeyError) as e:
+            raise ValueError(f"Unknown provider: {provider}") from e
         self.actual_id: str = str(actual_id)
-        if self.provider not in PROVIDER_ROOT_UUIDS:
-            raise ValueError(f"Unknown provider: {self.provider}")
-        self._root_uuid: UUID = PROVIDER_ROOT_UUIDS[self.provider]
 
     def get_entity_namespace(self, entity_type: EntityType | str) -> UUID:
         """Derive namespace UUID for a specific entity type under this provider."""

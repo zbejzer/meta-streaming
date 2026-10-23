@@ -26,7 +26,7 @@ def load_streaming_album(
     refresh: bool = False,
 ) -> Album:
     """Generic album loader for any supported streaming provider."""
-    provider_enum = Provider(provider_name) if isinstance(provider_name, str) else provider_name
+    provider_enum = Provider(provider_name)
     provider = MetadataProvider(provider_enum, str(album_id))
     release_mbid = str(provider.generate_release_UUID())
 
@@ -66,7 +66,7 @@ def load_streaming_album(
     def create_request():
         album._load_request = api_helper.get_release_by_id(
             str(album_id),
-            partial(deezerjson.recordings_request_finished_proxy, album, task_id),
+            partial(deezerjson.recordings_request_finished_proxy, api, album, task_id),
             priority=priority,
             refresh=refresh,
         )

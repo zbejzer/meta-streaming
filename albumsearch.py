@@ -102,8 +102,8 @@ class StreamingAlbumSearchDialog(SearchDialog):
             self.fetch_cleanup()
             self.fetching = False
 
+        self.current_index = index
         if index == 0:
-            self.current_index = 0
             self.current_query = text
             del self.search_results[:]
             self.load_more_button.setVisible(False)

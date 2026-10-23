@@ -121,7 +121,8 @@ _API_HELPER_REGISTRY: dict[Provider, type[BaseStreamingAPIHelper]] = {
 
 def get_api_helper_for_provider(provider: Provider | str, webservice: WebService) -> BaseStreamingAPIHelper:
     """Instantiate and return the API helper for a specific streaming provider."""
-    provider_enum = Provider(provider) if isinstance(provider, str) else provider
-    if provider_enum not in _API_HELPER_REGISTRY:
-        raise ValueError(f"No API helper registered for provider: {provider_enum}")
-    return _API_HELPER_REGISTRY[provider_enum](webservice)
+    try:
+        provider_enum = Provider(provider)
+        return _API_HELPER_REGISTRY[provider_enum](webservice)
+    except (ValueError, KeyError) as e:
+        raise ValueError(f"No API helper registered for provider: {provider}") from e

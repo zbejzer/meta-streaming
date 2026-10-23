@@ -75,3 +75,32 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
   - Implemented `get_api_helper_for_provider(provider, webservice)` factory registry.
   - Generic `load_streaming_album(api, provider, album_id, cluster)` loader supporting any current or future streaming service.
   - Extensible `StreamingCoverArtProvider` in `coverart.py` fetching artwork dynamically for any streaming provider.
+
+---
+
+### Stage 4: Code Quality, Pythonic EAFP & Reliability Refactoring (Completed)
+
+#### 1. Trust Picard's Plugin API Guarantees (Remove Defensive LBYL)
+- [x] **Simplify `coverart.py`**:
+  - Removed defensive `getattr` fallback checks (`getattr(self, "api", None)` and `getattr(self.album, "metastreaming_provider", None)`). Picard guarantees `self.api` and `self.album` on `CoverArtProvider` instances.
+  - Directly accesses `self.metadata.get(f"{self.provider.value}_albumid")` and `self.api.plugin_config["cover_size"]`.
+- [x] **Simplify `_finish_deezer_release` in `deezerjson.py`**:
+  - Simplified provider attribute access without defensive `hasattr` guards.
+
+#### 2. Adopt Pythonic EAFP Over LBYL & Redundant Type Checks
+- [x] **Clean Up `StrEnum` Handling (`providers.py`, `album.py`, `api_helpers.py`)**:
+  - Removed `isinstance(x, str)` checks (`StrEnum` instances are `str` subclasses; `Provider(x)` conversion is idempotent).
+  - Replaced manual `if key not in dict: raise ValueError` guards with EAFP `try / except (ValueError, KeyError)` blocks in `providers.py` and `api_helpers.py`.
+- [x] **Refactor JSON Parsing in `deezerjson.py`**:
+  - Replaced nested `isinstance` and key-existence checks (in genre and contributor parsing) with EAFP `try / except (KeyError, TypeError)` blocks and list comprehensions.
+  - Removed control-flow `assert` statements from async network callbacks.
+
+#### 3. Eliminate Repeated `PluginApi.get_api()` Calls
+- [x] **Explicit Context Passing**:
+  - Passed `api` explicitly through callback partials (`recordings_request_finished_proxy`, `_request_track`, `_track_request_finished`), eliminating frame-inspection calls (`PluginApi.get_api()`) inside per-track async callbacks.
+
+#### 4. Fix Concurrency & Pagination Bugs
+- [x] **Parallel Track Error Handling (`deezerjson.py`)**:
+  - Added `album.cancel_tasks()` on track request failure to safely cancel remaining in-flight tasks and prevent race conditions.
+- [x] **Pagination Offset Update (`albumsearch.py`)**:
+  - Updated `self.current_index = index` in `StreamingAlbumSearchDialog.search()` so subsequent clicks on "Load More" advance correctly (`0 -> 25 -> 50 -> 75`).
