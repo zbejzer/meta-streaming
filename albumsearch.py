@@ -21,7 +21,6 @@ from picard.plugins.metastreaming.deezerjson import albumsearch_to_metadata
 
 
 class StreamingAlbumSearchDialog(SearchDialog):
-
     dialog_header_state = "streamingalbumsearchdialog_header_state"
 
     options = [Option("persist", dialog_header_state, QtCore.QByteArray())]
@@ -185,7 +184,9 @@ class StreamingAlbumSearchDialog(SearchDialog):
         # Functionality from picard's AlbumSearchDialog.load_section
         release: Metadata = self.search_results[row]
         # generating IDs due to not being associated with any actual MB release
-        provider: MetadataProvider = MetadataProvider(MetadataProvider.Names.DEEZER, str(release["deezer_albumid"]))
+        provider: MetadataProvider = MetadataProvider(
+            MetadataProvider.Names.DEEZER, str(release["deezer_albumid"])
+        )
         release_mbid = provider.generate_release_UUID()
         rg_mbid = provider.generate_releasegroup_UUID()
         if self.existing_album:
@@ -204,7 +205,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
                 self.tagger.albums[release_mbid] = album
                 self.tagger.album_added.emit(album)
                 album.metastreaming_provider = provider  # pyright: ignore[reportAttributeAccessIssue]
-                album.load_from_deezer()    # FIXME: replace with a non-dynamically added function      #pyright: ignore[reportAttributeAccessIssue]
+                album.load_from_deezer()  # FIXME: replace with a non-dynamically added function      #pyright: ignore[reportAttributeAccessIssue]
             # Functionality from picard's AlbumSearchDialog.load_selection
             if self.cluster:
                 files = self.cluster.iterfiles()

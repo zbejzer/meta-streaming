@@ -13,7 +13,7 @@ class MetadataProvider(object):
             UUID("d1957bc9-dab9-4ced-9f31-d4f963efe34b"),
             UUID("64d6b991-d489-4196-bf4f-d537b0249757"),
             UUID("85658c83-9524-4e0f-ae00-178448e07a76"),
-            UUID("db451a77-193c-42e9-a6ef-f59637536b08")
+            UUID("db451a77-193c-42e9-a6ef-f59637536b08"),
         )
     }
 

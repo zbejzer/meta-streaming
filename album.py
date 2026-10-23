@@ -18,8 +18,7 @@ def load_from_deezer(self, priority=False, refresh=False):
         log.info("Not reloading, some requests are still active.")
         return
     self.tagger.window.set_statusbar_message(
-        N_("Loading album %(id)s …"),
-        {'id': self.id}
+        N_("Loading album %(id)s …"), {"id": self.id}
     )
     self.loaded = False
     self.status = AlbumStatus.LOADING
@@ -38,5 +37,5 @@ def load_from_deezer(self, priority=False, refresh=False):
         self.metastreaming_provider.actual_id,  # pyright: ignore[reportAttributeAccessIssue]
         partial(deezerjson.recordings_request_finished_proxy, self),
         priority=priority,
-        refresh=refresh
+        refresh=refresh,
     )

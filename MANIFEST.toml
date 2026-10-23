@@ -1,0 +1,7 @@
+uuid = "359c2dd1-a6a1-4e05-a441-d3e93bba7a43"
+name = "Streaming Metadata"
+authors = ["Stanisław Borodziuk"]
+description = "Get metadata from streaming services"
+api = ['3.0']
+license = "GPL-3.0-or-later"
+license_url = "https://www.gnu.org/licenses/gpl-3.0.html"
