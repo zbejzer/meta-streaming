@@ -32,6 +32,7 @@ from picard.webservice import ratecontrol
 
 from .albumsearch import StreamingAlbumSearchDialog
 from .coverart import DeezerCoverArtProvider
+from .options import StreamingOptionsPage
 
 
 class GetMetaStreaming(BaseAction):
@@ -61,6 +62,19 @@ def enable(api: PluginApi):
         in_profile=True,
         bounds=(50, 2000),
     )
+    api.plugin_config.register_option(
+        "cover_size",
+        "xl",
+        title="Preferred Cover Art Size",
+        in_profile=True,
+    )
+    api.plugin_config.register_option(
+        "tag_explicit",
+        True,
+        title="Tag explicit tracks (~explicit)",
+        in_profile=True,
+    )
+
     delay_ms = api.plugin_config["rate_limit_ms"]
     ratecontrol.set_minimum_delay_for_url("https://api.deezer.com", delay_ms)
 
@@ -70,3 +84,4 @@ def enable(api: PluginApi):
     )
     api.register_cluster_action(GetMetaStreaming)
     api.register_cover_art_provider(DeezerCoverArtProvider)
+    api.register_options_page(StreamingOptionsPage)

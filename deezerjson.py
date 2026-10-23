@@ -78,7 +78,8 @@ def _mb_track_from_track(node: dict, provider: MetadataProvider):
     track["recording"]["artist-credit"] = track["artist-credit"]
     track["recording"]["relations"] = list()
 
-    if node.get("explicit_lyrics"):
+    api = PluginApi.get_api()
+    if api.plugin_config["tag_explicit"] and node.get("explicit_lyrics"):
         track["explicit"] = True
 
     return track

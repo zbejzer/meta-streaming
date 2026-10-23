@@ -14,6 +14,7 @@ class DeezerCoverArtProvider(CoverArtProvider):
         if not deezer_id:
             return CoverArtProvider.QueueState.FINISHED
 
-        cover_url = f"https://api.deezer.com/album/{deezer_id}/image?size=xl"
+        cover_size = getattr(self, "api", None) and self.api.plugin_config["cover_size"] or "xl"
+        cover_url = f"https://api.deezer.com/album/{deezer_id}/image?size={cover_size}"
         self.queue_put(CoverArtImage(cover_url, types=["front"]))
         return CoverArtProvider.QueueState.FINISHED

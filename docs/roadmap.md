@@ -61,10 +61,12 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 
 ---
 
-### Stage 3: Options UI & Multi-Provider Architecture (Future)
+### Stage 3: Options UI & Multi-Provider Architecture (In Progress)
 
-- [ ] **Plugin Settings Page (`OptionsPage`)**:
-  - Settings UI for rate limit (ms), cover art preferred size (`xl`, `big`, `medium`), and explicit lyrics tag toggle.
+- [x] **Plugin Settings Page (`StreamingOptionsPage`)**:
+  - Registered `StreamingOptionsPage` under `api.register_options_page()`.
+  - Configurable settings UI for minimum request delay in ms (`rate_limit_ms`), preferred cover art resolution (`cover_size`), and explicit track tagging (`tag_explicit`).
+  - Integrated profile override support (`in_profile=True` and `OPTIONS` page widget mapping).
 - [ ] **Search UI Enhancements**:
   - Search result pagination and cover art thumbnail caching in `StreamingAlbumSearchDialog`.
 - [ ] **Multi-Provider Abstract Layer**:
