@@ -1,9 +1,16 @@
 from functools import partial
+from typing import ClassVar
 
-from PyQt6 import QtGui
+from PyQt6 import (
+    QtGui,
+    QtWidgets,
+)
 
 from picard import log
-from picard.i18n import N_
+from picard.i18n import (
+    N_,
+    gettext as _,
+)
 from picard.plugin3.api import (
     Metadata,
     PluginApi,
@@ -35,6 +42,7 @@ from picard.ui.searchdialog.album import (
 
 class StreamingAlbumSearchDialog(SearchDialog):
     dialog_header_state = "streamingalbumsearchdialog_header_state"
+    _cover_cache: ClassVar[dict[str, QtGui.QPixmap]] = {}
 
     def __init__(self, parent, force_advanced_search=None, existing_album=None):
         self.columns = Columns(
@@ -62,6 +70,18 @@ class StreamingAlbumSearchDialog(SearchDialog):
         self.scrolled.connect(self.fetch_coverarts)
         self.resized.connect(self.fetch_coverarts)
 
+        # Search pagination state
+        self.current_index = 0
+        self.results_limit = 25
+        self.total_results = 0
+        self.current_query = ""
+
+        # Load More button
+        self.load_more_button = QtWidgets.QPushButton(_("Load More"), self.buttonBox)
+        self.load_more_button.setVisible(False)
+        self.buttonBox.addButton(self.load_more_button, QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        self.load_more_button.clicked.connect(self.load_more_results)
+
     @restore_method
     def restore_table_header_state(self):
         api = PluginApi.get_api()
@@ -76,14 +96,23 @@ class StreamingAlbumSearchDialog(SearchDialog):
         api.plugin_persist[self.dialog_header_state] = state
         log.debug("save_state: %s", self.dialog_header_state)
 
-    def search(self, text):
+    def search(self, text, index=0):
         """Perform search using query provided by the user."""
         if self.fetching:
             self.fetch_cleanup()
             self.fetching = False
+
+        if index == 0:
+            self.current_index = 0
+            self.current_query = text
+            del self.search_results[:]
+            self.load_more_button.setVisible(False)
+            self.show_progress()
+        else:
+            self.load_more_button.setEnabled(False)
+
         self.retry_params = Retry(self.search, text)
         self.search_box_text(text)
-        self.show_progress()
         api = PluginApi.get_api()
         deezer_api = DeezerAPIHelper(api.web_service)
         deezer_api.find(
@@ -91,7 +120,15 @@ class StreamingAlbumSearchDialog(SearchDialog):
             query=text,
             search=True,
             advanced_search=self.use_advanced_search,
+            index=index,
+            limit=self.results_limit,
         )
+
+    def load_more_results(self):
+        """Fetch next page of search results."""
+        if self.current_query:
+            next_index = self.current_index + self.results_limit
+            self.search(self.current_query, index=next_index)
 
     def show_similar_albums(self, cluster):
         """Perform search by using existing metadata information
@@ -121,16 +158,32 @@ class StreamingAlbumSearchDialog(SearchDialog):
 
         try:
             releases: list = document["data"]
-            if len(releases) < 1:
+            self.total_results = document.get("total", len(releases))
+            if len(releases) < 1 and not self.search_results:
                 raise ValueError
         except (KeyError, TypeError, ValueError):
             self.no_results_found()
             return
 
-        del self.search_results[:]
+        # Advance current index if this was a paginated request
+        if "next" in document or len(releases) > 0:
+            if "total" in document:
+                self.total_results = document["total"]
+
         self.parse_releases(releases)
         self.display_results()
         self.fetch_coverarts()
+
+        # Update Load More button state
+        loaded_count = len(self.search_results)
+        if loaded_count < self.total_results and len(releases) > 0:
+            self.load_more_button.setText(
+                _("Load More ({count}/{total})").format(count=loaded_count, total=self.total_results)
+            )
+            self.load_more_button.setEnabled(True)
+            self.load_more_button.setVisible(True)
+        else:
+            self.load_more_button.setVisible(False)
 
     def fetch_coverarts(self):
         if self.fetching:
@@ -142,14 +195,20 @@ class StreamingAlbumSearchDialog(SearchDialog):
 
     def fetch_coverart(self, cell):
         """Queue cover art from Deezer server for each album in search
-        results.
+        results, utilizing in-memory thumbnail cache if available.
         """
         if cell.fetched:
             return
         if not cell.is_visible():
             return
-        cell.fetched = True
+
         deezerid = cell.mbid
+        if deezerid in self._cover_cache:
+            cell.fetched = True
+            cell.set_pixmap(self._cover_cache[deezerid])
+            return
+
+        cell.fetched = True
         cell.fetch_task = self.tagger.webservice.download_url(
             url=f"{DeezerAPIHelper.API_URL}/album/{deezerid}/image?size=medium",
             handler=partial(self._cover_downloaded, cell),
@@ -158,7 +217,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
     def _cover_downloaded(self, cover_cell, data, http, error):
         """Handle cover art query reply from Deezer server.
         If server returns the cover image successfully, update the cover art
-        cell of particular release.
+        cell of particular release and cache the pixmap.
         """
         cover_cell.fetch_task = None
 
@@ -167,8 +226,11 @@ class StreamingAlbumSearchDialog(SearchDialog):
         else:
             pixmap = QtGui.QPixmap()
             try:
-                pixmap.loadFromData(data)
-                cover_cell.set_pixmap(pixmap)
+                if pixmap.loadFromData(data):
+                    self._cover_cache[cover_cell.mbid] = pixmap
+                    cover_cell.set_pixmap(pixmap)
+                else:
+                    cover_cell.not_found()
             except Exception as e:
                 cover_cell.not_found()
                 log.error(e)

@@ -53,6 +53,11 @@ class DeezerAPIHelper(APIHelper):
         if query:
             filters["q"] = query
 
+        if "index" in kwargs:
+            filters["index"] = kwargs["index"]
+        if "limit" in kwargs:
+            filters["limit"] = kwargs["limit"]
+
         return self.get(
             "/search/album",
             handler,

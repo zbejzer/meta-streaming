@@ -67,7 +67,8 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
   - Registered `StreamingOptionsPage` under `api.register_options_page()`.
   - Configurable settings UI for minimum request delay in ms (`rate_limit_ms`), preferred cover art resolution (`cover_size`), and explicit track tagging (`tag_explicit`).
   - Integrated profile override support (`in_profile=True` and `OPTIONS` page widget mapping).
-- [ ] **Search UI Enhancements**:
-  - Search result pagination and cover art thumbnail caching in `StreamingAlbumSearchDialog`.
+- [x] **Search UI Enhancements**:
+  - Search result pagination (`index` and `limit` query parameters) and "Load More (X/Total)" button in `StreamingAlbumSearchDialog`.
+  - In-memory cover art thumbnail caching (`_cover_cache`) preventing duplicate network requests on scroll, column re-sort, and pagination.
 - [ ] **Multi-Provider Abstract Layer**:
   - Abstract API client and provider interfaces (`MetadataProvider`) to easily support Spotify, Tidal, or Qobuz in the same framework.
