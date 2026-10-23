@@ -1,12 +1,19 @@
-from enum import Enum, auto
-from uuid import UUID, uuid3
+from enum import (
+    Enum,
+    auto,
+)
+from typing import ClassVar
+from uuid import (
+    UUID,
+    uuid3,
+)
 
 
-class MetadataProvider(object):
+class MetadataProvider:
     class Names(Enum):
         DEEZER = auto()
 
-    _providers: dict[Names, tuple] = {
+    _providers: ClassVar[dict[Names, tuple]] = {
         Names.DEEZER: (
             UUID("67e48b9e-dd7e-11ef-9282-325096b39f47"),
             UUID("0d376a2a-dd80-11ef-90e7-325096b39f47"),

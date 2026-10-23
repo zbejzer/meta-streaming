@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # MetaStreaming plugin for Picard
 #
 # Copyright (C) 2025 Stanisław Borodziuk
@@ -22,60 +21,56 @@
 # [2026-10-23] Started working on API V3 migration
 
 
-from picard.plugin3.api import PluginApi
+from PyQt6 import QtCore
 
 from picard.plugin3.api import (
     Album,
     BaseAction,
     Cluster,
+    PluginApi,
 )
-
-from typing import cast
-
+from picard.tagger import Tagger
 
 from .album import load_from_deezer
 from .albumsearch import StreamingAlbumSearchDialog
 from .api_helpers import DeezerAPIHelper
 
-from PyQt6 import QtCore
-
 
 class GetMetaStreaming(BaseAction):
     TITLE = "Get metadata from streamings"
 
-    # technically redundant because class inherits after QObject and tagger is added to it dynamically
-    # during tagger init, but explicitly creating it can't hurt
-    tagger: Tagger | None = None
-
     def callback(self, objs):
-        assert isinstance(self.tagger, Tagger)
-
-        # redundant check for now, but keeping it for the possible future use
-        if isinstance(objs[0], Cluster):
+        if objs and isinstance(objs[0], Cluster):
             dialog = StreamingAlbumSearchDialog(
-                self.tagger.window, force_advanced_search=True
+                self.api.tagger.window,
+                force_advanced_search=True,
             )
             dialog.show_similar_albums(objs[0])
             dialog.exec()
-            return
         else:
             self.api.logger.debug(
-                "GetMetaStreaming expected a Cluster, got %r", objs[0]
+                "GetMetaStreaming expected a Cluster, got %r",
+                objs[0] if objs else None,
             )
-            return
-
-
-assert hasattr(QtCore.QObject, "tagger") and isinstance(QtCore.QObject.tagger, Tagger)
-GetMetaStreaming.tagger = QtCore.QObject.tagger
-_deezer_api: DeezerAPIHelper = DeezerAPIHelper(QtCore.QObject.tagger.webservice)
-
-# FIXME: awful way to do this but I don't care enough to do it better
-setattr(Tagger, "deezer_api", _deezer_api)
-setattr(Album, "load_from_deezer", load_from_deezer)
-
-# TODO: Implement for albums,tracks, etc.
 
 
 def enable(api: PluginApi):
     """Called when plugin is enabled."""
+    api.plugin_persist.register_option(
+        StreamingAlbumSearchDialog.dialog_header_state,
+        QtCore.QByteArray(),
+    )
+    deezer_api = DeezerAPIHelper(api.web_service)
+    Tagger.deezer_api = deezer_api  # type: ignore[attr-defined]
+    if api.tagger is not None:
+        api.tagger.deezer_api = deezer_api  # type: ignore[attr-defined]
+    Album.load_from_deezer = load_from_deezer  # type: ignore[attr-defined]
     api.register_cluster_action(GetMetaStreaming)
+
+
+def disable():
+    """Called when plugin is disabled."""
+    if hasattr(Tagger, "deezer_api"):
+        delattr(Tagger, "deezer_api")
+    if hasattr(Album, "load_from_deezer"):
+        delattr(Album, "load_from_deezer")

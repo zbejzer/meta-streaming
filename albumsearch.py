@@ -1,54 +1,88 @@
 from functools import partial
-from typing import cast
-import uuid
 
-from PyQt5 import (
-    QtCore,
-    QtGui,
-)
+from PyQt6 import QtGui
 
 from picard import log
-from picard.album import Album
-from picard.config import Option
-from picard.metadata import Metadata
+from picard.i18n import N_
+from picard.plugin3.api import (
+    Album,
+    Metadata,
+    PluginApi,
+)
 from picard.tagger import Tagger
-from picard.ui.searchdialog.album import CoverCell
-from picard.ui.searchdialog import Retry, SearchDialog
+from picard.util import restore_method
 
-from picard.plugins.metastreaming.providers import MetadataProvider
-from picard.plugins.metastreaming.api_helpers import build_deezer_query, DeezerAPIHelper
-from picard.plugins.metastreaming.deezerjson import albumsearch_to_metadata
+from .api_helpers import (
+    DeezerAPIHelper,
+    build_deezer_query,
+)
+from .deezerjson import albumsearch_to_metadata
+from .providers import MetadataProvider
+
+from picard.ui.columns import (
+    Column,
+    ColumnAlign,
+    Columns,
+    ColumnSortType,
+)
+from picard.ui.searchdialog import (
+    Retry,
+    SearchDialog,
+)
+from picard.ui.searchdialog.album import (
+    CoverCell,
+    CoverColumn,
+)
 
 
 class StreamingAlbumSearchDialog(SearchDialog):
     dialog_header_state = "streamingalbumsearchdialog_header_state"
 
-    options = [Option("persist", dialog_header_state, QtCore.QByteArray())]
-
     def __init__(self, parent, force_advanced_search=None, existing_album=None):
+        self.columns = Columns(
+            (
+                Column(N_("Name"), "album", sort_type=ColumnSortType.NAT, width=150),
+                Column(N_("Artist"), "albumartist"),
+                Column(N_("Tracks"), "tracks", sort_type=ColumnSortType.NAT, align=ColumnAlign.RIGHT),
+                Column(N_("Source"), "source"),
+                Column(N_("ID"), "deezer_albumid", sort_type=ColumnSortType.NAT, align=ColumnAlign.RIGHT),
+                CoverColumn(N_("Cover"), "cover", width=100),
+            ),
+            default_width=100,
+        )
         super().__init__(
             parent,
-            accept_button_title=_("Load into Picard"),
+            N_("Streaming Album Search Results"),
+            accept_button_title=N_("Load into Picard"),
             search_type="album",
             force_advanced_search=force_advanced_search,
         )
         self.cluster = None
         self.existing_album = existing_album
-        self.setWindowTitle(_("Streaming Album Search Results"))
-        self.columns = [
-            ("name", _("Name")),
-            ("artist", _("Artist")),
-            ("tracks", _("Tracks")),
-            ("source", _("Source")),
-            ("id", _("ID")),
-            ("cover", _("Cover")),
-        ]
         self.cover_cells = []
         self.fetching = False
         self.scrolled.connect(self.fetch_coverarts)
+        self.resized.connect(self.fetch_coverarts)
+
+    @restore_method
+    def restore_table_header_state(self):
+        api = PluginApi.get_api()
+        state = api.plugin_persist[self.dialog_header_state]
+        if state:
+            self.header().restoreState(state)
+            log.debug("restore_state: %s", self.dialog_header_state)
+
+    def save_table_header_state(self):
+        state = self.header().saveState()
+        api = PluginApi.get_api()
+        api.plugin_persist[self.dialog_header_state] = state
+        log.debug("save_state: %s", self.dialog_header_state)
 
     def search(self, text):
         """Perform search using query provided by the user."""
+        if self.fetching:
+            self.fetch_cleanup()
+            self.fetching = False
         self.retry_params = Retry(self.search, text)
         self.search_box_text(text)
         self.show_progress()
@@ -116,7 +150,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
         if not cell.is_visible():
             return
         cell.fetched = True
-        deezerid = cell.release["deezer_albumid"]
+        deezerid = cell.mbid
         cell.fetch_task = self.tagger.webservice.download_url(
             url=f"{DeezerAPIHelper.API_URL}/album/{deezerid}/image?size=medium",
             handler=partial(self._cover_downloaded, cell),
@@ -145,9 +179,10 @@ class StreamingAlbumSearchDialog(SearchDialog):
             if cell.fetch_task is not None:
                 log.debug(
                     "Removing cover art fetch task for %s",
-                    cell.release["deezer_albumid"],
+                    cell.mbid,
                 )
-                self.tagger.webservice.remove_task(cell.fetch_task)
+                self.tagger.webservice.abort_task(cell.fetch_task)
+                cell.fetch_task = None
 
     def closeEvent(self, event):
         if self.cover_cells:
@@ -163,18 +198,27 @@ class StreamingAlbumSearchDialog(SearchDialog):
     def display_results(self):
         self.prepare_table()
         self.cover_cells = []
-        column = self.colpos("cover")
+        cover_pos = self.columns.pos("cover")
+        cover_size = self.columns[cover_pos].width
+        vheader = self.table.verticalHeader()
+        vheader.setDefaultSectionSize(cover_size)
         for row, release in enumerate(self.search_results):
             self.table.insertRow(row)
-            self.set_table_item(row, "name", release, "album")
-            self.set_table_item(row, "artist", release, "albumartist")
-            self.set_table_item(row, "tracks", release, "tracks")
-            self.set_table_item(row, "source", release, "source")
-            self.set_table_item(row, "id", release, "deezer_albumid")
-            self.cover_cells.append(
-                CoverCell(self.table, release, row, column, on_show=self.fetch_coverart)
-            )
-        self.show_table(sort_column="id")
+            for pos, c in enumerate(self.columns):
+                if isinstance(c, CoverColumn):
+                    self.cover_cells.append(
+                        CoverCell(
+                            self.table,
+                            row,
+                            pos,
+                            release["deezer_albumid"],
+                            cover_size,
+                            on_show=self.fetch_coverart,
+                        )
+                    )
+                else:
+                    self.set_table_item_value(row, pos, c, release)
+        self.show_table(sort_column="deezer_albumid")
 
     def accept_event(self, rows):
         for row in rows:
@@ -184,11 +228,9 @@ class StreamingAlbumSearchDialog(SearchDialog):
         # Functionality from picard's AlbumSearchDialog.load_section
         release: Metadata = self.search_results[row]
         # generating IDs due to not being associated with any actual MB release
-        provider: MetadataProvider = MetadataProvider(
-            MetadataProvider.Names.DEEZER, str(release["deezer_albumid"])
-        )
-        release_mbid = provider.generate_release_UUID()
-        rg_mbid = provider.generate_releasegroup_UUID()
+        provider: MetadataProvider = MetadataProvider(MetadataProvider.Names.DEEZER, str(release["deezer_albumid"]))
+        release_mbid = str(provider.generate_release_UUID())
+        rg_mbid = str(provider.generate_releasegroup_UUID())
         if self.existing_album:
             # No need to implement for now as StreamingAlbumSearchDialog can only be invoked for Clusters
             # self.existing_album.switch_release_version(release_mbid)
