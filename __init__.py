@@ -24,17 +24,13 @@
 from PyQt6 import QtCore
 
 from picard.plugin3.api import (
-    Album,
     BaseAction,
     Cluster,
     PluginApi,
 )
-from picard.tagger import Tagger
 from picard.webservice import ratecontrol
 
-from .album import load_from_deezer
 from .albumsearch import StreamingAlbumSearchDialog
-from .api_helpers import DeezerAPIHelper
 from .coverart import DeezerCoverArtProvider
 
 
@@ -72,18 +68,5 @@ def enable(api: PluginApi):
         StreamingAlbumSearchDialog.dialog_header_state,
         QtCore.QByteArray(),
     )
-    deezer_api = DeezerAPIHelper(api.web_service)
-    Tagger.deezer_api = deezer_api  # type: ignore[attr-defined]
-    if api.tagger is not None:
-        api.tagger.deezer_api = deezer_api  # type: ignore[attr-defined]
-    Album.load_from_deezer = load_from_deezer  # type: ignore[attr-defined]
     api.register_cluster_action(GetMetaStreaming)
     api.register_cover_art_provider(DeezerCoverArtProvider)
-
-
-def disable():
-    """Called when plugin is disabled."""
-    if hasattr(Tagger, "deezer_api"):
-        delattr(Tagger, "deezer_api")
-    if hasattr(Album, "load_from_deezer"):
-        delattr(Album, "load_from_deezer")

@@ -170,12 +170,12 @@ def _finish_deezer_release(album: Album, mb_document: dict | None, http, error) 
 
 
 def _request_track(album: Album, track_id: str) -> None:
-    assert isinstance(album.tagger.deezer_api, DeezerAPIHelper)
     api = PluginApi.get_api()
+    deezer_api = DeezerAPIHelper(api.web_service)
     task_id = f"deezer_track_{track_id}"
 
     def create_request():
-        album._load_request = album.tagger.deezer_api.get_track_by_id(
+        album._load_request = deezer_api.get_track_by_id(
             track_id,
             partial(_track_request_finished, album, task_id),
         )

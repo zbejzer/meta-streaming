@@ -27,7 +27,7 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 
 ---
 
-### Stage 2: Performance, Cover Art & Metadata Pipeline (In Progress)
+### Stage 2: Performance, Cover Art & Metadata Pipeline (Completed)
 
 #### Step 1: Cover Art & Base Rate Control (Completed)
 - [x] **Cover Art Provider (`DeezerCoverArtProvider`)**: Registered a dedicated cover art provider that fetches full-resolution XL artwork from Deezer (`size=xl`). This sets `front_image_found = True` and eliminates CAA 404 errors on synthetic UUIDs.
@@ -48,10 +48,10 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
   - Included ISRCs on tracks and recordings.
   - Populated multi-disc attributes (`position`, `track-count`, `format`, `discnumber`, `totaldiscs`).
 
-#### Step 3: Clean Loader & Refactoring (Next)
-- [ ] **Loader Decoupling**:
-  - Replace dynamic `Album.load_from_deezer` method assignment with a dedicated `load_deezer_album(api, album_id, cluster)` loader function.
-  - Ensure all album tasks (`api.add_album_task` / `api.complete_album_task`) complete cleanly on both success and error.
+#### Step 3: Clean Loader & Refactoring (Completed)
+- [x] **Loader Decoupling**:
+  - Replaced dynamic `Album.load_from_deezer` method assignment and `Tagger.deezer_api` monkey-patching with a standalone, thread-safe `load_deezer_album(api, deezer_album_id, cluster)` loader function.
+  - Ensured all album tasks (`api.add_album_task` / `api.complete_album_task`) complete cleanly on both success and error.
 
 ---
 

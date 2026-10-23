@@ -8,48 +8,74 @@ from picard.plugin3.api import (
     Metadata,
     PluginApi,
 )
-from picard.tagger import Tagger
 
 from . import deezerjson
+from .api_helpers import DeezerAPIHelper
+from .providers import MetadataProvider
 
 
-# Dynamically added to Album class
-def load_from_deezer(self, priority=False, refresh=False):
-    assert isinstance(self, Album)
-    assert isinstance(self.tagger, Tagger)  # pyright: ignore[reportAttributeAccessIssue]
-    if self.has_critical_tasks():
-        log.info("Not reloading, some requests are still active.")
-        return
-    self.tagger.window.set_statusbar_message(N_("Loading album %(id)s …"), {"id": self.id})
-    self.loaded = False
-    self.status = AlbumStatus.LOADING
-    if self.release_group:
-        self.release_group.loaded = False
-        self.release_group.genres.clear()
-    self.metadata.clear()
-    self.genres.clear()
-    self.update(update_selection=False)
-    self._new_metadata = Metadata()
-    self._new_tracks = []
-    self._pending_tasks.clear()
-    self.clear_errors()
+def load_deezer_album(
+    api: PluginApi,
+    deezer_album_id: str,
+    cluster=None,
+    priority: bool = False,
+    refresh: bool = False,
+) -> Album:
+    """Load a Deezer album into Picard using synthetic MusicBrainz UUIDs."""
+    provider = MetadataProvider(MetadataProvider.Names.DEEZER, str(deezer_album_id))
+    release_mbid = str(provider.generate_release_UUID())
 
-    api = PluginApi.get_api()
-    task_id = f"deezer_release_{self.id}"
+    # Register release group
+    rg_mbid = str(provider.generate_releasegroup_UUID())
+    api.tagger.get_release_group_by_id(rg_mbid).loaded_albums.add(release_mbid)
+
+    album = api.tagger.albums.get(release_mbid)
+    if not album:
+        album = Album(release_mbid)
+        api.tagger.albums[release_mbid] = album
+        api.tagger.album_added.emit(album)
+
+    album.metastreaming_provider = provider  # type: ignore[attr-defined]
+
+    if album.has_critical_tasks():
+        log.info("Not reloading album %s, some requests are still active.", release_mbid)
+        return album
+
+    api.tagger.window.set_statusbar_message(N_("Loading album %(id)s …"), {"id": release_mbid})
+    album.loaded = False
+    album.status = AlbumStatus.LOADING
+    if album.release_group:
+        album.release_group.loaded = False
+        album.release_group.genres.clear()
+    album.metadata.clear()
+    album.genres.clear()
+    album.update(update_selection=False)
+    album._new_metadata = Metadata()
+    album._new_tracks = []
+    album._pending_tasks.clear()
+    album.clear_errors()
+
+    deezer_api = DeezerAPIHelper(api.web_service)
+    task_id = f"deezer_release_{release_mbid}"
 
     def create_request():
-        self._load_request = self.tagger.deezer_api.get_release_by_id(  # pyright: ignore[reportAttributeAccessIssue]
-            self.metastreaming_provider.actual_id,  # pyright: ignore[reportAttributeAccessIssue]
-            partial(deezerjson.recordings_request_finished_proxy, self, task_id),
+        album._load_request = deezer_api.get_release_by_id(
+            str(deezer_album_id),
+            partial(deezerjson.recordings_request_finished_proxy, album, task_id),
             priority=priority,
             refresh=refresh,
         )
-        return self._load_request
+        return album._load_request
 
     api.add_album_task(
-        self,
+        album,
         task_id,
-        f"Release metadata for {self.id}",
+        f"Release metadata for {release_mbid}",
         request_factory=create_request,
         blocking=True,
     )
+
+    if cluster and cluster.files:
+        api.tagger.move_files_to_album(cluster.files, release_mbid, album)
+
+    return album
