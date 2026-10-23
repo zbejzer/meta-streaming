@@ -1,4 +1,3 @@
-from collections import deque
 from functools import partial
 import traceback
 from typing import cast
@@ -31,24 +30,29 @@ _ALBUM_TO_MB_RELEASE: dict[str, str] = {
 _ALBUMSEARCH_TO_METADATA: dict[str, str] = {"title": "album", "nb_tracks": "tracks"}
 
 
-def _artist_credit_from_contributors(node: dict, provider: MetadataProvider):
+def _artist_credit_from_contributors(node: list | dict, provider: MetadataProvider):
     ac: list = list()
+    if isinstance(node, dict):
+        node = [node]
     for i, c in enumerate(node):
-        ac.append(dict())
-        ac[i]["name"] = c["name"]
+        if not isinstance(c, dict) or "name" not in c:
+            continue
+        item = dict()
+        item["name"] = c["name"]
 
         if i + 2 == len(node):
-            ac[i]["joinphrase"] = " & "
+            item["joinphrase"] = " & "
         elif i + 1 < len(node):
-            ac[i]["joinphrase"] = ", "
+            item["joinphrase"] = ", "
         else:
-            ac[i]["joinphrase"] = ""
+            item["joinphrase"] = ""
 
         artist = dict()
         artist["name"] = artist["sort-name"] = c["name"]
         artist["disambiguation"] = ""
-        artist["id"] = str(provider.generate_artist_UUID(c["id"]))
-        ac[i]["artist"] = artist
+        artist["id"] = str(provider.generate_artist_UUID(str(c.get("id", c["name"]))))
+        item["artist"] = artist
+        ac.append(item)
     return ac
 
 
@@ -60,16 +64,22 @@ def _mb_track_from_track(node: dict, provider: MetadataProvider):
             track[_TRACK_TO_MB_TRACK[key]] = value
 
     track["id"] = str(provider.generate_track_UUID(str(node["id"])))
-    track["length"] = int(node["duration"]) * 1000
+    track["length"] = int(node.get("duration", 0)) * 1000
     track["recording"] = dict(track)
-    track["position"] = int(node["track_position"])
-    track["number"] = str(node["track_position"])
-    track["artist-credit"] = _artist_credit_from_contributors(node["contributors"], provider)
+    track["position"] = int(node.get("track_position", 1))
+    track["number"] = str(node.get("track_position", 1))
+
+    contributors = node.get("contributors") or node.get("artist") or []
+    track["artist-credit"] = _artist_credit_from_contributors(contributors, provider)
 
     track["recording"]["isrcs"] = list()
-    track["recording"]["isrcs"].append(str(node["isrc"]))
+    if isrc := node.get("isrc"):
+        track["recording"]["isrcs"].append(str(isrc))
     track["recording"]["artist-credit"] = track["artist-credit"]
     track["recording"]["relations"] = list()
+
+    if node.get("explicit_lyrics"):
+        track["explicit"] = True
 
     return track
 
@@ -85,24 +95,42 @@ def album_to_mb_release(node: dict, provider: MetadataProvider):
         if key in _ALBUM_TO_MB_RELEASE:
             mb_node[_ALBUM_TO_MB_RELEASE[key]] = value
 
-    mb_node["artist-credit"] = _artist_credit_from_contributors(node["contributors"], provider)
+    contributors = node.get("contributors") or node.get("artist") or []
+    mb_node["artist-credit"] = _artist_credit_from_contributors(contributors, provider)
 
-    mb_node["label-info"] = list()
-    mb_node["label-info"].append(dict())
-    mb_node["label-info"][0]["catalog-number"] = None
-    label_mb = dict()
-    label_mb["name"] = label_mb["sort-name"] = node["label"]
-    label_mb["id"] = str(provider.generate_label_UUID())
-    mb_node["label-info"][0]["label"] = label_mb
+    if label_name := node.get("label"):
+        mb_node["label-info"] = [
+            {
+                "catalog-number": None,
+                "label": {
+                    "name": label_name,
+                    "sort-name": label_name,
+                    "id": str(provider.generate_label_UUID(label_name)),
+                },
+            }
+        ]
+    else:
+        mb_node["label-info"] = []
 
-    mb_node["release-group"] = dict()
-    mb_node["release-group"]["disambiguation"] = ""
-    mb_node["release-group"]["id"] = str(provider.generate_releasegroup_UUID())
-    mb_node["release-group"]["artist-credit"] = mb_node["artist-credit"]
-    mb_node["release-group"]["title"] = mb_node["title"]
-    mb_node["release-group"]["primary-type"] = node["record_type"]
+    # Map genres if present
+    genres_data = []
+    if "genres" in node and isinstance(node["genres"], dict):
+        for g in node["genres"].get("data", []):
+            if isinstance(g, dict) and "name" in g:
+                genres_data.append({"name": g["name"], "count": 1})
+    if genres_data:
+        mb_node["genres"] = genres_data
 
-    # Prepare for later per-track processing
+    record_type = str(node.get("record_type", "album")).capitalize()
+    mb_node["release-group"] = {
+        "disambiguation": "",
+        "id": str(provider.generate_releasegroup_UUID()),
+        "artist-credit": mb_node["artist-credit"],
+        "title": mb_node.get("title", ""),
+        "primary-type": record_type,
+    }
+
+    # Prepare for per-track processing
     mb_node["media"] = list()
 
     return mb_node
@@ -142,10 +170,6 @@ def _finish_deezer_release(album: Album, mb_document: dict | None, http, error) 
 
 
 def _request_track(album: Album, track_id: str) -> None:
-    log.debug(
-        "Album tracks not loaded in initial request for %r, issuing separate requests",
-        album,
-    )
     assert isinstance(album.tagger.deezer_api, DeezerAPIHelper)
     api = PluginApi.get_api()
     task_id = f"deezer_track_{track_id}"
@@ -173,8 +197,6 @@ def _track_request_finished(album: Album, task_id: str, document, http, error) -
         isinstance(album, Album)
         and hasattr(album, "metastreaming_provider")
         and hasattr(album, "metastreaming_mb_node")
-        and hasattr(album, "metastreaming_tracklist")
-        and isinstance(album.metastreaming_tracklist, deque)
     )
 
     if error:
@@ -182,8 +204,8 @@ def _track_request_finished(album: Album, task_id: str, document, http, error) -
         _finish_deezer_release(album, None, http, error)
         return
 
-    track_index: int = int(document["track_position"]) - 1
-    disk_index: int = int(document["disk_number"]) - 1
+    track_index: int = int(document.get("track_position", 1)) - 1
+    disk_index: int = int(document.get("disk_number", 1)) - 1
     mb_track = _mb_track_from_track(document, album.metastreaming_provider)
 
     while len(album.metastreaming_mb_node["media"]) < disk_index + 1:
@@ -205,17 +227,15 @@ def _track_request_finished(album: Album, task_id: str, document, http, error) -
         album.metastreaming_mb_node["media"][disk_index]["tracks"]
     )
 
-    if len(album.metastreaming_tracklist) > 0:
-        next_track_id = album.metastreaming_tracklist.popleft()
-        _request_track(album, next_track_id)
-    else:
+    # When all parallel track tasks finish, finalize the release
+    if not album.has_critical_tasks():
         mb_document = album.metastreaming_mb_node
         _clean_attributes(album)
         _finish_deezer_release(album, mb_document, http, error)
 
 
 def recordings_request_finished_proxy(album: Album, task_id: str, document, http, error) -> None:
-    """Handle Deezer album response and queue track requests."""
+    """Handle Deezer album response and queue track requests concurrently."""
     api = PluginApi.get_api()
     api.complete_album_task(album, task_id)
     if error:
@@ -225,15 +245,13 @@ def recordings_request_finished_proxy(album: Album, task_id: str, document, http
 
     assert isinstance(album, Album) and hasattr(album, "metastreaming_provider")
     album.metastreaming_mb_node = album_to_mb_release(cast(dict, document), album.metastreaming_provider)  # type: ignore[attr-defined]
-    album.metastreaming_tracklist = deque()  # type: ignore[attr-defined]
-    assert hasattr(album, "metastreaming_mb_node") and hasattr(album, "metastreaming_tracklist")
 
-    for track in document["tracks"]["data"]:
-        album.metastreaming_tracklist.append(str(track["id"]))
-
-    if len(album.metastreaming_tracklist) > 0:
-        track_id = album.metastreaming_tracklist.popleft()
-        _request_track(album, track_id)
+    track_items = document.get("tracks", {}).get("data", [])
+    if track_items:
+        log.debug("Dispatching %d track requests concurrently for %r", len(track_items), album)
+        for track_node in track_items:
+            track_id = str(track_node["id"])
+            _request_track(album, track_id)
     else:
         mb_node = album.metastreaming_mb_node
         _clean_attributes(album)

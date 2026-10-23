@@ -30,10 +30,12 @@ from picard.plugin3.api import (
     PluginApi,
 )
 from picard.tagger import Tagger
+from picard.webservice import ratecontrol
 
 from .album import load_from_deezer
 from .albumsearch import StreamingAlbumSearchDialog
 from .api_helpers import DeezerAPIHelper
+from .coverart import DeezerCoverArtProvider
 
 
 class GetMetaStreaming(BaseAction):
@@ -56,6 +58,16 @@ class GetMetaStreaming(BaseAction):
 
 def enable(api: PluginApi):
     """Called when plugin is enabled."""
+    api.plugin_config.register_option(
+        "rate_limit_ms",
+        100,
+        title="Deezer API minimum request delay (ms)",
+        in_profile=True,
+        bounds=(50, 2000),
+    )
+    delay_ms = api.plugin_config["rate_limit_ms"]
+    ratecontrol.set_minimum_delay_for_url("https://api.deezer.com", delay_ms)
+
     api.plugin_persist.register_option(
         StreamingAlbumSearchDialog.dialog_header_state,
         QtCore.QByteArray(),
@@ -66,6 +78,7 @@ def enable(api: PluginApi):
         api.tagger.deezer_api = deezer_api  # type: ignore[attr-defined]
     Album.load_from_deezer = load_from_deezer  # type: ignore[attr-defined]
     api.register_cluster_action(GetMetaStreaming)
+    api.register_cover_art_provider(DeezerCoverArtProvider)
 
 
 def disable():
