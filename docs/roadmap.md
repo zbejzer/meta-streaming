@@ -61,7 +61,7 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 
 ---
 
-### Stage 3: Options UI & Multi-Provider Architecture (In Progress)
+### Stage 3: Options UI & Multi-Provider Architecture (Completed)
 
 - [x] **Plugin Settings Page (`StreamingOptionsPage`)**:
   - Registered `StreamingOptionsPage` under `api.register_options_page()`.
@@ -70,5 +70,8 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 - [x] **Search UI Enhancements**:
   - Search result pagination (`index` and `limit` query parameters) and "Load More (X/Total)" button in `StreamingAlbumSearchDialog`.
   - In-memory cover art thumbnail caching (`_cover_cache`) preventing duplicate network requests on scroll, column re-sort, and pagination.
-- [ ] **Multi-Provider Abstract Layer**:
-  - Abstract API client and provider interfaces (`MetadataProvider`) to easily support Spotify, Tidal, or Qobuz in the same framework.
+- [x] **Multi-Provider Abstract Layer**:
+  - Created `BaseStreamingAPIHelper` in `api_helpers.py` defining standard search, release detail, track detail, and artwork methods across providers.
+  - Implemented `get_api_helper_for_provider(provider, webservice)` factory registry.
+  - Generic `load_streaming_album(api, provider, album_id, cluster)` loader supporting any current or future streaming service.
+  - Extensible `StreamingCoverArtProvider` in `coverart.py` fetching artwork dynamically for any streaming provider.

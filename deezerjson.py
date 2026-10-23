@@ -11,8 +11,13 @@ from picard.plugin3.api import (
     PluginApi,
 )
 
-from .api_helpers import DeezerAPIHelper
-from .providers import MetadataProvider
+from .api_helpers import (
+    get_api_helper_for_provider,
+)
+from .providers import (
+    MetadataProvider,
+    Provider,
+)
 
 
 _TRACK_TO_MB_TRACK: dict[str, str] = {
@@ -159,6 +164,10 @@ def _finish_deezer_release(album: Album, mb_document: dict | None, http, error) 
             try:
                 parse_result = album._parse_release(mb_document)
                 if parse_result == ParseResult.PARSED:
+                    provider_attr = getattr(album, "metastreaming_provider", None)
+                    if provider_attr and hasattr(provider_attr, "actual_id"):
+                        provider_enum = getattr(provider_attr, "provider", Provider.DEEZER)
+                        album._new_metadata[f"{provider_enum.value}_albumid"] = str(provider_attr.actual_id)
                     album._run_album_metadata_processors()
                 elif parse_result == ParseResult.REDIRECT:
                     error = False
@@ -166,17 +175,20 @@ def _finish_deezer_release(album: Album, mb_document: dict | None, http, error) 
                 error = True
                 album.error_append(traceback.format_exc())
     finally:
+        _clean_attributes(album)
         if parse_result == ParseResult.PARSED or error:
             album._finalize_loading(error)
 
 
 def _request_track(album: Album, track_id: str) -> None:
     api = PluginApi.get_api()
-    deezer_api = DeezerAPIHelper(api.web_service)
-    task_id = f"deezer_track_{track_id}"
+    provider_attr = getattr(album, "metastreaming_provider", None)
+    provider_enum = provider_attr.provider if provider_attr else Provider.DEEZER
+    api_helper = get_api_helper_for_provider(provider_enum, api.web_service)
+    task_id = f"{provider_enum.value}_track_{track_id}"
 
     def create_request():
-        album._load_request = deezer_api.get_track_by_id(
+        album._load_request = api_helper.get_track_by_id(
             track_id,
             partial(_track_request_finished, album, task_id),
         )
@@ -201,7 +213,6 @@ def _track_request_finished(album: Album, task_id: str, document, http, error) -
     )
 
     if error:
-        _clean_attributes(album)
         _finish_deezer_release(album, None, http, error)
         return
 
@@ -231,7 +242,6 @@ def _track_request_finished(album: Album, task_id: str, document, http, error) -
     # When all parallel track tasks finish, finalize the release
     if not album.has_critical_tasks():
         mb_document = album.metastreaming_mb_node
-        _clean_attributes(album)
         _finish_deezer_release(album, mb_document, http, error)
 
 
@@ -240,7 +250,6 @@ def recordings_request_finished_proxy(album: Album, task_id: str, document, http
     api = PluginApi.get_api()
     api.complete_album_task(album, task_id)
     if error:
-        _clean_attributes(album)
         _finish_deezer_release(album, None, http, error)
         return
 
@@ -255,7 +264,6 @@ def recordings_request_finished_proxy(album: Album, task_id: str, document, http
             _request_track(album, track_id)
     else:
         mb_node = album.metastreaming_mb_node
-        _clean_attributes(album)
         _finish_deezer_release(album, mb_node, http, error)
 
 

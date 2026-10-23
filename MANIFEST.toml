@@ -3,5 +3,6 @@ name = "Streaming Metadata"
 authors = ["Stanisław Borodziuk"]
 description = "Get metadata from streaming services"
 api = ['3.0']
+categories = ["metadata", "coverart"]
 license = "GPL-3.0-or-later"
 license_url = "https://www.gnu.org/licenses/gpl-3.0.html"

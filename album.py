@@ -10,19 +10,24 @@ from picard.plugin3.api import (
 )
 
 from . import deezerjson
-from .api_helpers import DeezerAPIHelper
-from .providers import MetadataProvider
+from .api_helpers import get_api_helper_for_provider
+from .providers import (
+    MetadataProvider,
+    Provider,
+)
 
 
-def load_deezer_album(
+def load_streaming_album(
     api: PluginApi,
-    deezer_album_id: str,
+    provider_name: Provider | str,
+    album_id: str,
     cluster=None,
     priority: bool = False,
     refresh: bool = False,
 ) -> Album:
-    """Load a Deezer album into Picard using synthetic MusicBrainz UUIDs."""
-    provider = MetadataProvider(MetadataProvider.Names.DEEZER, str(deezer_album_id))
+    """Generic album loader for any supported streaming provider."""
+    provider_enum = Provider(provider_name) if isinstance(provider_name, str) else provider_name
+    provider = MetadataProvider(provider_enum, str(album_id))
     release_mbid = str(provider.generate_release_UUID())
 
     # Register release group
@@ -55,12 +60,12 @@ def load_deezer_album(
     album._pending_tasks.clear()
     album.clear_errors()
 
-    deezer_api = DeezerAPIHelper(api.web_service)
-    task_id = f"deezer_release_{release_mbid}"
+    api_helper = get_api_helper_for_provider(provider_enum, api.web_service)
+    task_id = f"{provider_enum.value}_release_{release_mbid}"
 
     def create_request():
-        album._load_request = deezer_api.get_release_by_id(
-            str(deezer_album_id),
+        album._load_request = api_helper.get_release_by_id(
+            str(album_id),
             partial(deezerjson.recordings_request_finished_proxy, album, task_id),
             priority=priority,
             refresh=refresh,
@@ -79,3 +84,21 @@ def load_deezer_album(
         api.tagger.move_files_to_album(cluster.files, release_mbid, album)
 
     return album
+
+
+def load_deezer_album(
+    api: PluginApi,
+    deezer_album_id: str,
+    cluster=None,
+    priority: bool = False,
+    refresh: bool = False,
+) -> Album:
+    """Convenience shortcut for loading a Deezer album."""
+    return load_streaming_album(
+        api,
+        Provider.DEEZER,
+        deezer_album_id,
+        cluster=cluster,
+        priority=priority,
+        refresh=refresh,
+    )

@@ -27,6 +27,7 @@ from picard.plugin3.api import (
     BaseAction,
     Cluster,
     PluginApi,
+    t_,
 )
 from picard.webservice import ratecontrol
 
@@ -36,7 +37,7 @@ from .options import StreamingOptionsPage
 
 
 class GetMetaStreaming(BaseAction):
-    TITLE = "Get metadata from streamings"
+    TITLE = t_("action.get_meta_streaming", "Get metadata from streamings")
 
     def callback(self, objs):
         if objs and isinstance(objs[0], Cluster):
