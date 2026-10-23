@@ -9,7 +9,10 @@ This document outlines the development roadmap and migration plan for the MetaSt
 The primary goal of this plugin is to allow MusicBrainz Picard users to search for and load album metadata from Deezer (and future streaming services) as a direct alternative to MusicBrainz.
 
 Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the plugin utilizes a **Synthetic MusicBrainz Adapter** pattern:
-1. **Deterministic UUIDs**: Generates stable, collision-free UUIDs (`uuid3`/`uuid5`) for Deezer entities (releases, release groups, artists, labels, tracks, recordings).
+1. **Dynamic Two-Tier UUID Derivation**: Generates stable, collision-free UUIDs (`uuid5`) for streaming entities across multiple providers:
+   - **Provider Root Namespace**: Each streaming provider (Deezer, Spotify, Tidal, Qobuz, Apple Music) has one pregenerated root UUID.
+   - **Entity Namespace**: Entity-type namespaces (`release`, `release_group`, `artist`, `label`, `track`, `recording`) are derived dynamically: `uuid5(provider_root_uuid, entity_type)`.
+   - **Item UUID**: Final entity UUIDs are hashed dynamically: `uuid5(entity_namespace, item_id)`. Adding a new streaming provider requires only adding one root UUID.
 2. **Schema Translation**: Translates Deezer JSON responses into Picard's internal MusicBrainz `release_node` format.
 3. **Native Matching**: Leverages Picard's file-matching engine, tagger scripts, and tagging formulas seamlessly without modifying Picard core.
 
@@ -52,6 +55,9 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 - [x] **Loader Decoupling**:
   - Replaced dynamic `Album.load_from_deezer` method assignment and `Tagger.deezer_api` monkey-patching with a standalone, thread-safe `load_deezer_album(api, deezer_album_id, cluster)` loader function.
   - Ensured all album tasks (`api.add_album_task` / `api.complete_album_task`) complete cleanly on both success and error.
+- [x] **Scalable Multi-Provider UUID Engine (`MetadataProvider`)**:
+  - Refactored `providers.py` to use a dynamic two-tier `uuid5` derivation model (`Provider` enum, `EntityType` enum, pregenerated root UUIDs per provider).
+  - Scalable structure allowing new providers (Spotify, Tidal, Qobuz, Apple Music) to be added with a single root UUID definition.
 
 ---
 
