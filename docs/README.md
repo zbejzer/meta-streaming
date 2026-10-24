@@ -35,6 +35,11 @@ It achieves this with a **Synthetic MusicBrainz Adapter**: Deezer JSON responses
 | :-- | :-- |
 | [reference/module-map.md](reference/module-map.md) | File-by-file reference of the plugin package |
 | [reference/deezer-api.md](reference/deezer-api.md) | Deezer API endpoints used by the plugin and the example API-response artifacts |
+| [reference/deezer/global-parameters.md](reference/deezer/global-parameters.md) | Deezer API doc fragment: global parameters (pagination, access token, request methods) |
+| [reference/deezer/album.md](reference/deezer/album.md) | Deezer API doc fragment: album object fields, related actions, connections |
+| [reference/picard/basic-tags.md](reference/picard/basic-tags.md) | Picard doc fragment: basic tags (from MusicBrainz, plugin/script-populated, iTunes-specific) |
+| [reference/picard/advanced-tags.md](reference/picard/advanced-tags.md) | Picard doc fragment: advanced tags (track relationship and genre tags) |
+| [reference/mp3tag/tags.md](reference/mp3tag/tags.md) | Mp3tag doc fragment: tag field mappings across ID3v2, MP4, Matroska, ASF, RIFF INFO |
 | [reference/MusicBrainz API - MusicBrainz.html](reference/MusicBrainz%20API%20-%20MusicBrainz.html) | Saved web page: MusicBrainz API release schema reference |
 | [reference/MusicBrainz Picard Tag Mapping.html](reference/MusicBrainz%20Picard%20Tag%20Mapping.html) | Saved web page: Picard tag mapping table (which tags are written to files) |
 

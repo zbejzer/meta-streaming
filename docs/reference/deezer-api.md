@@ -2,6 +2,8 @@
 
 > The HTTP surface the plugin exercises, and the example artifacts that document the response shapes. Behavior context: [../dataflow.md](../dataflow.md). A sibling document per future provider should follow this pattern (see [../providers.md](../providers.md) §4).
 
+Official documentation fragments (converted to Markdown) live in [deezer/](deezer/): [deezer/global-parameters.md](deezer/global-parameters.md) (pagination, access token, request methods) and [deezer/album.md](deezer/album.md) (album object fields, actions, connections).
+
 All requests go through Picard's webservice via `DeezerAPIHelper` (`api_helpers.py`), so redirects and per-host rate control are handled by core. The plugin sets a minimum request delay for `https://api.deezer.com` from the `rate_limit_ms` option; on redirect, the delay is transferred to the CDN host natively (`ratecontrol.copy_minimal_delay`).
 
 ## Endpoints
