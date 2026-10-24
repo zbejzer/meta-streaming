@@ -46,17 +46,37 @@ Two things remain true from the earlier analysis:
 - **No standard advisory tag exists in the format ecosystem** (Mp3tag's table: the only advisory mapping anywhere is the MP4-exclusive `rtng`/`ITUNESADVISORY` atom). A written `explicit` tag is a freeform, community-convention tag — not a format-standard one.
 - **Picard has no mapping to `rtng`**, so the plugin cannot produce the iTunes advisory atom through Picard's native path — and bypassing Picard's writers with plugin-side mutagen surgery is out of scope (see §5).
 
-**Purity principle, re-scoped**: the Stage 5 audit's guarantee was that nothing *leaks unintentionally* from the synthetic node translation — every tag Picard derives from the node was verified against Picard's own mapping. A deliberate, documented, option-controlled tag that appears in the metadata box where the user can edit or remove it per-track is the same category as a user-added tag, not leakage. The plugin adds exactly one such tag (`explicit`) and nothing else.
+**Purity principle, re-scoped**: the Stage 5 audit's guarantee was that nothing *leaks unintentionally* from the synthetic node translation — every tag Picard derives from the node was verified against Picard's own mapping. A deliberate, documented, option-controlled tag that appears in the metadata box where the user can edit or remove it per-track is the same category as a user-added tag, not leakage. The plugin adds exactly one advisory tag (`explicit`), per-track provenance (`deezer_track_id`, §4), and the standard `bpm` tag (Stage 9) — nothing else.
 
-## 4. Decision
+## 4. Other Deezer-only fields — what else is worth preserving?
 
-1. **Materialize the regular `explicit` tag** (value `"1"`) via a track metadata processor — planned as [roadmap Stage 8](../roadmap.md): when `track_node["explicit"]` is truthy (set by `_mb_track_from_track` from `explicit_lyrics`), set `metadata["explicit"] = "1"`; no-op otherwise (a fresh `Metadata` is built per parse, so no stale-value handling is needed).
-2. **Why the regular name over `~explicit`**: visible and editable in the metadata box (user can delete it like any UI-added tag), scriptable as `%explicit%`, written as a freeform tag on MP3/MP4/FLAC/Ogg/APE/WAV where players and tools can read it, and round-trippable through Mp3tag. The tilde variant would have been invisible, unwritten, and inferior to what the option title always promised.
-3. **The `tag_explicit` option remains the user's control**, default `True` — it now does what its title says. Unticking keeps files free of the tag. The stale "(~explicit)" parenthetical in the option title becomes "(explicit)" (Stage 8, `options.py` — a plain `_()` string, not a `const/` domain string).
-4. **No format-specific surgery**: the tag goes through Picard's native freeform path only. WMA files simply do not carry it (ASF restriction); no plugin bypass to be added.
-5. **Keep the granular `explicit_content_*` scale dropped.**
+Reviewing the Deezer album-object documentation fragment ([../reference/deezer/album.md](../reference/deezer/album.md)) and the example response (`examples/deezer/album_dzr.json`), the fields **without a predefined Picard tag equivalent** were each assessed for preservation value:
 
-## 5. Rejected alternatives
+| Field (level) | Verdict | Rationale |
+| :-- | :-- | :-- |
+| `explicit` (`explicit_lyrics`, track) | **preserved** | Content advisory; uniquely available; §2–§3. |
+| `deezer_track_id` (track `id`) | **preserved** | Per-track provenance/identity — the counterpart of the album-level `deezer_album_id` that is already stamped onto metadata after parsing. It was already carried on the synthetic track node but silently dropped by `track_to_metadata()`. Preserving it makes a tagged file fully round-trippable to the exact streaming track (re-fetch, dedup, preview construction). |
+| `link` / `share` (album + track URLs) | dropped | Derivable from the preserved IDs (`https://www.deezer.com/album/{deezer_album_id}`); storing derivable data violates the minimization principle. |
+| `rank` (track), `fans` (album) | dropped | Volatile popularity metrics — values baked into files go stale immediately and misrepresent the source. |
+| `preview` (track) | dropped | 30-second CDN sample URL; promotional ephemera no player consumes. |
+| `title_short`, `title_version` (track) | dropped | Version information is already part of `title`; no consumer anywhere. |
+| `readable`, `available`, `alternative`, `fallback` (album + track) | dropped | Session/user-conditional playback flags with no archival meaning. |
+| `provider`, `md5_image`, `genre_id`, `tracklist` (album) | dropped | Redundant (`provider` ≡ source, `genre_id` ≡ `genres`), internal bookkeeping, or derivable. |
+| `explicit_content_lyrics` / `explicit_content_cover` (0–7 scale) | dropped | Album-"lyrics"-scoped states, no consumer (decided in §2). |
+| `isrc`, `upc`, `duration`, `release_date`, `record_type`, `genres`, `label`, `contributors`, `track_position`, `disk_number` | n/a | Already mapped to predefined Picard tags (`isrc`, `barcode`, `length`, `date`, `releasetype`, `genre`, `label`, `artist-credit`, `tracknumber`/`discnumber`) — not arbitrary. |
+
+Both preserved tags travel on the synthetic track node and are promoted into final track metadata by the `track_metadata_processor` (`deezerjson.py`): `deezer_track_id` unconditionally (provenance is independent of any option), `explicit` gated on the `tag_explicit` option at parse time — which also keeps it off when a session-restored node is re-parsed after the option was disabled. Stage 9 added `bpm` to the same processor (see [track-response-analysis.md](track-response-analysis.md)).
+
+## 5. Decision
+
+1. **Materialize the regular `explicit` tag** (value `"1"`) via a track metadata processor — **implemented as [roadmap Stage 8](../roadmap.md)**: when `track_node["explicit"]` is truthy (set by `_mb_track_from_track` from `explicit_lyrics`), set `metadata["explicit"] = "1"`; no-op otherwise (a fresh `Metadata` is built per parse, so no stale-value handling is needed).
+2. **Preserve per-track provenance as `deezer_track_id`** — promoted unconditionally by the same processor whenever the synthetic node carries it (§4).
+3. **Why the regular name over `~explicit`**: visible and editable in the metadata box (user can delete it like any UI-added tag), scriptable as `%explicit%`, written as a freeform tag on MP3/MP4/FLAC/Ogg/APE/WAV where players and tools can read it, and round-trippable through Mp3tag. The tilde variant would have been invisible, unwritten, and inferior to what the option title always promised.
+4. **The `tag_explicit` option remains the user's control**, default `True` — it now does what its title says. Unticking keeps files free of the tag. The stale "(~explicit)" parenthetical in the option title became "(explicit)" (`options.py` — a plain `_()` string, not a `const/` domain string).
+5. **No format-specific surgery**: the tag goes through Picard's native freeform path only. WMA files simply do not carry it (ASF restriction); no plugin bypass to be added.
+6. **Keep the granular `explicit_content_*` scale dropped**, and all other rejected candidates from §4 dropped.
+
+## 6. Rejected alternatives
 
 | Alternative | Why rejected |
 | :-- | :-- |
@@ -64,10 +84,15 @@ Two things remain true from the earlier analysis:
 | Write `rtng` / `ITUNESADVISORY` for MP4 files | Picard has no mapping to `rtng`; would require bypassing Picard's writers with plugin-side mutagen surgery — violating the adapter pattern for one narrow format. Revisit only if Picard core ever grows native advisory-tag support. |
 | Surface the full 0–7 scale as `explicit_content_lyrics` | Album-scoped states with no consumer anywhere; dead weight per the minimization principle. |
 | Drop the option / drop the flag | Loses uniquely available, decision-relevant data that MusicBrainz cannot provide. |
+| Also preserve `link`/`preview`/`rank`/`fans` as tags | Derivable, ephemeral, or volatile data — see the §4 assessment table; preserving them would bake stale or redundant values into files. |
 
-## 6. Verification pointers for Stage 8
+## 7. Verification — implemented (Stage 8)
 
-- **Unit test (test-first)**: parse a synthetic node whose track carries `explicit: True` → the track's metadata contains `explicit == "1"`; with `explicit` absent or with `tag_explicit` disabled → no `explicit` key. Keep as a permanent regression test.
-- **Purity**: the processor performs a single metadata addition — no node mutation, no file-format code paths; `release_to_metadata()`/`track_to_metadata()` output is otherwise unchanged, and `explicit` is the plugin's only deliberate freeform tag.
-- **Format spot-check**: saved MP3 → `TXXX:explicit` frame; saved MP4 → `----:com.apple.iTunes:explicit` atom; saved WMA → no such tag.
-- **Lint**: `ruff format` + `ruff check` on every touched file.
+- **Regression test**: `test/meta_streaming/test_explicit_tag.py` (test-first) —
+  - `test_parse_release_carries_explicit_and_trackid`: parses a builder-built synthetic release node through the real `Album._parse_release` + `_finalize_loading` with the processor registered the way `PluginApi` does (`functools.partial` carrying the api), asserting `explicit == "1"` and `deezer_track_id` on the final track metadata;
+  - `test_parse_release_without_processor_leaves_tags_absent`: proves the node keys alone never reach metadata (the original gap);
+  - option-gating tests for both the node builder and the processor (including session-restore re-parse with the option disabled);
+  - `test_processor_noop_for_genuine_mb_node`: a MusicBrainz-shaped node leaves metadata untouched.
+- **Purity**: the processor performs two metadata additions only — no node mutation, no file-format code paths; `release_to_metadata()`/`track_to_metadata()` output is otherwise unchanged, and `explicit` + `deezer_track_id` are the plugin's only deliberate freeform tags.
+- **Format spot-check** (per §3 table): saved MP3 → `TXXX:explicit` / `TXXX:deezer_track_id`; saved MP4 → `----:com.apple.iTunes:explicit` / `----:com.apple.iTunes:deezer_track_id`; saved WMA → neither.
+- **Lint**: `ruff format` + `ruff check` clean on `deezerjson.py`, `__init__.py`, `options.py` and the test module (`ty` not available in the development environment used).

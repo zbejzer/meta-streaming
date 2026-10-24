@@ -21,9 +21,9 @@ The custom `DeezerCoverArtProvider` is unknown to Picard's default `ca_providers
 
 Stage 6 (planned) removes the custom provider and delivers artwork through the native, default-enabled **UrlRelationships** ("Allowed Cover Art URLs") provider by injecting a `cover art link` URL relation into the synthetic release node — no user action required. Full mechanism proof: [design/cover-art-piggyback-mechanism.md](design/cover-art-piggyback-mechanism.md). Caveat that will remain: users who disabled "Allowed Cover Art URLs" get no Deezer artwork (an explicit user choice, same as for MusicBrainz releases).
 
-## 3. `tag_explicit` has no visible effect (until Stage 8)
+## 3. `tag_explicit` needs a load (or re-parse) to take effect
 
-The option (title "Tag explicit tracks (~explicit)") sets `track["explicit"]` on the synthetic node, but Picard's `track_to_metadata()` ignores that node key — so no explicit indication reaches metadata or files today. A bridge into `Metadata` is required regardless of the tag name chosen. This is resolved by analysis ([explicit-tag-analysis.md](design/explicit-tag-analysis.md)): the flag will be materialized as the regular, user-visible `explicit` tag via a track metadata processor (planned [roadmap Stage 8](roadmap.md)) — editable in the metadata box, scriptable as `%explicit%`, and written through Picard's native freeform path (`TXXX:explicit` on ID3, `----:com.apple.iTunes:explicit` on MP4, `EXPLICIT` on Vorbis, freeform on APEv2 and WAV's ID3 chunk). WMA (ASF) will not carry it — Picard's ASF writer is restricted to known `WM/…` names (`asf.py:331`). Until Stage 8 lands, the option has no effect. Details: [configuration.md](configuration.md) and the [mapping report](design/musicbrainz-deezer-mapping.md).
+The option (title "Tag explicit tracks (explicit)") gates the track metadata processor added in [Stage 8](roadmap.md): explicit tracks get the user-visible `explicit` tag (`"1"`) — editable in the metadata box, scriptable as `%explicit%`, and written through Picard's native freeform path (`TXXX:explicit` on MP3, `----:com.apple.iTunes:explicit` on MP4, `EXPLICIT` on Vorbis, freeform on APEv2 and WAV's ID3 chunk). The same processor preserves `deezer_track_id` per track. Behavioral notes: the option is evaluated at parse time, so toggling it requires a reload of the album (or a session re-parse) to take effect; WMA (ASF) files do not carry either tag — Picard's ASF writer is restricted to known `WM/…` names (`asf.py:331`). Decision record with the full field assessment: [explicit-tag-analysis.md](design/explicit-tag-analysis.md).
 
 ## 4. Metadata fidelity differences vs. MusicBrainz
 
@@ -31,12 +31,12 @@ Data present in MusicBrainz but absent (or flattened) in Deezer — therefore no
 
 - **Contributor roles flattened**: Deezer roles beyond `Main` (e.g. featuring) become plain `artist-credit` entries joined with `", "` / `" & "`; no `joinrelation` info.
 - **Artist nodes are minimal**: `sort-name` equals `name`, `disambiguation` is empty — no MB-style artist metadata.
-- **Genres are count-1**: `genres.data[].name` maps to `genre` with `count: 1`; Deezer has no folksonomy counts.
+- **Genres are count-100 by design**: the synthetic node emits the Deezer genre list with `count: 100` so it passes Picard's default "Minimal genre usage" filter (90) and materializes as the multi-value `genre` tag (Stage 9; Deezer has no folksonomy counts, and all counts are equal so the list is ordered alphabetically and capped by `max_genres`).
 - **Release context missing**: no country, packaging, language/script, barcode beyond UPC, disambiguation, or release status beyond the hardcoded `"Official"`.
 - **Single ISRC per track** (Deezer exposes one string; MB recordings can carry several).
 - **Release types limited** to Deezer's `record_type` (`album`/`single`/`ep` → `primary-type` → `~primaryreleasetype`/`releasetype`); no secondary types.
 - **Label name only** — no catalog number (Deezer doesn't expose one), no label MBID (removed by design).
-- Deezer-only data (`fans`, `available`, `preview` URLs, `rank`, per-track explicit-content granularity, `title_short`/`title_version`) is **dropped** — nothing in Picard consumes it (verified in the [mapping report](design/musicbrainz-deezer-mapping.md)).
+- Deezer-only data (`fans`, `available`, `preview` URLs, `rank`, per-track explicit-content granularity, `title_short`/`title_version`, `gain`) is **dropped** — nothing in Picard consumes it (verified in the [mapping report](design/musicbrainz-deezer-mapping.md)). `bpm` is preserved when Deezer reports a value `> 0` (Stage 9); track-level `release_date` was assessed and dropped ([track-response-analysis.md](design/track-response-analysis.md) §2).
 
 ## 5. Smaller behavioral notes
 

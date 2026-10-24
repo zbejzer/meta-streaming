@@ -26,7 +26,7 @@ meta-streaming/
 | Symbol | Role |
 | :-- | :-- |
 | `GetMetaStreaming(BaseAction)` | Cluster action "Get metadata from streamings"; opens `StreamingAlbumSearchDialog` seeded from the cluster (`show_similar_albums`). Logs a debug line when the selection is not a cluster. |
-| `enable(api)` | Registers: options `rate_limit_ms` / `cover_size` / `tag_explicit` (all `in_profile=True`), the Deezer rate-limit floor via `ratecontrol.set_minimum_delay_for_url`, dialog-header persistence (`plugin_persist`), the cluster action, `DeezerCoverArtProvider`, and `StreamingOptionsPage`. Unregistration on disable is handled by the plugin API. |
+| `enable(api)` | Registers: options `rate_limit_ms` / `cover_size` / `tag_explicit` (all `in_profile=True`), the Deezer rate-limit floor via `ratecontrol.set_minimum_delay_for_url`, dialog-header persistence (`plugin_persist`), the cluster action, the track metadata processor (`track_metadata_processor` from `deezerjson.py`), `DeezerCoverArtProvider`, and `StreamingOptionsPage`. Unregistration on disable is handled by the plugin API. |
 
 ## `providers.py` — identity engine
 
@@ -59,15 +59,16 @@ Full scheme: [../uuid-scheme.md](../uuid-scheme.md).
 
 | Symbol | Role |
 | :-- | :-- |
-| `_TRACK_TO_MB_TRACK` / `_ALBUM_TO_MB_RELEASE` / `_ALBUMSEARCH_TO_METADATA` | Field maps: track node, album node, search-result metadata. |
+| `_TRACK_TO_MB_TRACK` / `_ALBUM_TO_MB_RELEASE` / `_ALBUMSEARCH_TO_METADATA` | Field maps: track node (incl. `bpm`), album node (genres emitted with `count: 100` — see [design/track-response-analysis.md](design/track-response-analysis.md) §4), search-result metadata. |
 | `_artist_credit_from_contributors(node, provider)` | Builds `artist-credit` from `contributors` (or `artist`): joinphrases `", "` / `" & "`, synthetic artist UUIDs (name fallback when no `id`). |
 | `_mb_track_from_track(node, provider, api)` | Track + recording node builder: synthetic track UUID, ms duration, position/number, artist-credit, `recording.isrcs`, `recording.relations = []` sentinel, optional `explicit` flag. |
 | `album_to_mb_release(node, provider)` | Release node builder: synthetic id, `status: "Official"`, mapped fields, label-info (name only), genres, `release-group` subnode, empty `media`. |
 | `recordings_request_finished_proxy(api, album, task_id, document, http, error)` | Album-response callback: builds the node, parks it as `metastreaming_mb_node`, dispatches parallel `_request_track` per track (or finishes immediately when no tracks). |
 | `_request_track` / `_track_request_finished` | Per-track album task + response callback: builds the track node, slots it into `media[disk][pos]`, grows mediums, finalizes when no critical tasks remain; cancels remaining tasks on error or missing node. |
-| `_finish_deezer_release(album, mb_document, http, error)` | Single finalizer: `Album._parse_release` hand-off, `deezer_albumid` stamp, metadata processors, error capture, transient-attribute cleanup, `_finalize_loading`. |
+| `_finish_deezer_release(album, mb_document, http, error)` | Single finalizer: `Album._parse_release` hand-off, `deezer_album_id` stamp, metadata processors, error capture, transient-attribute cleanup, `_finalize_loading`. |
+| `track_metadata_processor(api, track, metadata, track_node, release_node=None)` | Track metadata processor (Stages 8–9): promotes `deezer_track_id` (always), `bpm` (standard tag, when Deezer reports `> 0`, integral values normalized), and `explicit = "1"` (gated on `tag_explicit` at parse time) from the synthetic node into final track metadata; no-op for genuine MusicBrainz nodes. Covered by `test/meta_streaming/test_explicit_tag.py`. |
 | `_clean_attributes(album)` | Removes transient `metastreaming_provider` / `metastreaming_mb_node`. |
-| `albumsearch_to_metadata(node, metadata)` | Search-result → `Metadata` mapping (`album`, `tracks`, `deezer_albumid`, `deezer_albumartistid`, `albumartist`, `source = "Deezer"`). |
+| `albumsearch_to_metadata(node, metadata)` | Search-result → `Metadata` mapping (`album`, `tracks`, `deezer_album_id`, `deezer_albumartist_id`, `albumartist`, `source = "Deezer"`). |
 
 ## `albumsearch.py` — search UI
 
@@ -97,6 +98,6 @@ Enablement caveat (registered disabled at position 666) and the Stage 6 replacem
 
 ## Supporting artifacts
 
-- `examples/deezer/album_dzr.json`, `examples/MusicBrainz/album_mb.json` — same-album ground truth used by the Stage 5 audit ([design/musicbrainz-deezer-mapping.md](design/musicbrainz-deezer-mapping.md), [reference/deezer-api.md](deezer-api.md)).
+- `examples/deezer/album_dzr.json`, `examples/deezer/album_tracks_dzr.json`, `examples/deezer/track_dzr.json`, `examples/MusicBrainz/album_mb.json` — ground-truth API artifacts used by the Stage 5 audit ([design/musicbrainz-deezer-mapping.md](design/musicbrainz-deezer-mapping.md), [reference/deezer-api.md](deezer-api.md)) and the track-response analysis ([design/track-response-analysis.md](design/track-response-analysis.md)).
 - `locale/en.toml` — plugin translation keys (`action.get_meta_streaming`, `manifest.name`, `manifest.description`).
 - `MANIFEST.toml` — plugin identity; `api = ['3.0']`, categories `metadata` + `coverart`.

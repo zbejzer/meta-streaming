@@ -58,6 +58,7 @@ Example for a hypothetical `spotify` implementation:
 1. **Identity** (`providers.py`)
    - Add `SPOTIFY = "spotify"` to `Provider` (root UUID already exists).
    - Nothing else: entity namespaces and item UUIDs derive automatically. ⚠️ Item IDs must be the provider's *stable native key* as a string (Spotify base-62 IDs are fine); if a provider has mutable IDs, resolve to an immutable one first.
+   - **ID-tag naming convention**: provenance tags follow `{provider}_{type}_{id}_id` (e.g. `deezer_album_id`, `deezer_track_id`, `deezer_albumartist_id`); a Spotify implementation would use `spotify_album_id`, `spotify_track_id`, `spotify_albumartist_id` — stamp/processor/cover-art lookups parameterized by `provider.value` already produce these names.
 2. **Transport** (`api_helpers.py`)
    - Subclass `BaseStreamingAPIHelper`, set `provider` and `API_URL`, implement the four abstract methods, map any extra endpoints (`_get_by_id` pattern).
    - Register in `_API_HELPER_REGISTRY`.

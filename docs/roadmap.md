@@ -189,19 +189,32 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 
 ---
 
-### Stage 8: `explicit` Track Metadata Processor (Planned)
+### Stage 8: `explicit` Track Metadata Processor (Implemented)
 
-> Decision record: [`explicit-tag-analysis.md`](design/explicit-tag-analysis.md) — why the Deezer explicit flag is materialized as the regular, user-visible `explicit` tag (editable in the metadata box, scriptable as `%explicit%`, written through Picard's native freeform path like any user-added tag) rather than an internal `~`-variable.
+> Decision record: [`explicit-tag-analysis.md`](design/explicit-tag-analysis.md) — why the Deezer explicit flag is materialized as the regular, user-visible `explicit` tag (editable in the metadata box, scriptable as `%explicit%`, written through Picard's native freeform path like any user-added tag) rather than an internal `~`-variable, plus the assessment of all other Deezer-only fields (only `deezer_track_id` additionally preserved).
 
-- [ ] **Materialize `explicit` in track metadata**:
-  - Register a track metadata processor via `api.register_track_metadata_processor()` with signature `(api, track, metadata, track_node, release_node=None)` (`picard/plugin3/api_impl.py:892`).
-  - When `track_node.get("explicit")` is truthy (set by `_mb_track_from_track()` from `explicit_lyrics` under the `tag_explicit` option), set `metadata["explicit"] = "1"`; no-op otherwise (fresh `Metadata` per parse, no stale-value handling needed).
-  - The tag flows through the standard paths: metadata box (visible, editable, deletable per track), tagger scripts (`%explicit%`), and file writing via the native freeform fallbacks — `TXXX:explicit` (ID3v2), `----:com.apple.iTunes:explicit` (MP4), `EXPLICIT` (Vorbis comments), freeform APEv2 item, WAV ID3v2 chunk. Not written on WMA (ASF `supports_tag` restriction) — accepted, no plugin-side bypass.
-- [ ] **Option title fix**: change the checkbox title in `options.py` from "Tag explicit tracks (~explicit)" to "Tag explicit tracks (explicit)" (plain `_()` string; update the plugin translation key if one exists for it).
-- [ ] **Test-first implementation** (repository guideline):
-  - Write a unit test reproducing the gap: a synthetic node whose track carries `explicit: True` must produce track metadata with `explicit == "1"`; with `explicit` absent or `tag_explicit` disabled, no `explicit` key. Keep as a permanent regression test.
-- [ ] **Verification**:
-  - `release_to_metadata()` / `track_to_metadata()` output unchanged except the added `explicit` tag; no node mutation; no file-format code paths touched — the freeform writes are Picard's own.
-  - `explicit` is the plugin's only deliberate freeform tag; everything else stays inside Picard's tag mapping (tag-purity guarantee re-scoped in the decision record).
+- [x] **Materialize `explicit` in track metadata**:
+  - `track_metadata_processor(api, track, metadata, track_node, release_node=None)` in `deezerjson.py`, registered via `api.register_track_metadata_processor()` in `enable()`.
+  - Sets `metadata["explicit"] = "1"` when `track_node["explicit"]` is truthy, gated on the `tag_explicit` option at parse time (also covers session-restored nodes re-parsed after the option was disabled); no-op otherwise.
+  - Additionally promotes `metadata["deezer_track_id"]` from the node unconditionally — per-track provenance, the counterpart of the album-level `deezer_album_id` (see the §4 assessment in the decision record for the rejected candidates: `link`, `preview`, `rank`, `fans`, `title_version`, playback flags).
+  - Only synthetic nodes carry these keys, so genuine MusicBrainz albums are unaffected.
+- [x] **Option title fix**: checkbox title and `register_option` title changed from "Tag explicit tracks (~explicit)" to "Tag explicit tracks (explicit)" (`options.py`, `__init__.py`; plain `_()` strings).
+- [x] **Test-first implementation** (repository guideline):
+  - `test/meta_streaming/test_explicit_tag.py` — regression suite covering: end-to-end parse through `Album._parse_release` + `_finalize_loading` with the processor registered the way `PluginApi` does (partial carrying the api, enablement emulated via `set_plugin_uuid`), the original gap (node keys alone never reach metadata), option gating on builder and processor, and no-op behavior for genuine MusicBrainz nodes.
+- [x] **Verification**:
+  - `release_to_metadata()` / `track_to_metadata()` output unchanged except the two promoted tags; no node mutation; no file-format code paths touched — the freeform writes are Picard's own (`TXXX:explicit`/`TXXX:deezer_track_id` ID3, `----:com.apple.iTunes:…` MP4, Vorbis/APE freeform, WAV ID3 chunk; not written on WMA per its `supports_tag` restriction).
+  - `explicit` and `deezer_track_id` are the plugin's only deliberate freeform tags; everything else stays inside Picard's tag mapping (tag-purity guarantee re-scoped in the decision record).
   - Granular `explicit_content_lyrics` / `explicit_content_cover` remain dropped per the minimization audit.
-  - `ruff format` + `ruff check` on touched files.
+  - `ruff format` + `ruff check` clean on all touched files (`ty` unavailable in the development environment).
+
+---
+
+### Stage 9: Track-Response Analysis — Implemented
+
+> Analysis record: [`track-response-analysis.md`](design/track-response-analysis.md) — three-shape field-availability matrix (album-embedded `tracks.data` vs. `/album/{id}/tracks` vs. `/track/{id}`), additional-tag assessment, pipeline optimization. Triggered by adding the Deezer track/genre documentation fragments and the `track_dzr.json` / `album_tracks_dzr.json` example artifacts. Verdicts decided by the user and implemented:
+
+- [x] **Keep requesting through `/track/{id}`** (fan-out retained; the single-`/album/{id}/tracks` switch stays a documented future trigger — see the analysis record §3).
+- [x] **Preserve the BPM tag when greater than 0**: `bpm` added to `_TRACK_TO_MB_TRACK` (falsy `0` skipped by the value iterator) and promoted by `track_metadata_processor` with integer normalization for integral values (MP4's `tmpo` is an int atom; fractional values reach every other format). Covered by dedicated regression tests plus an end-to-end parse assertion.
+- [x] **Use the Deezer genre list for the `genre` tag as a list**: fixed the count in the synthetic node's genres (`count: 1` → `count: 100`, the "Minimal genre usage" option's upper bound) so the list passes `Track._genres_to_metadata`'s default usage filter (90) instead of silently dropping every genre; the tag materializes as a multi-value list capped by `max_genres`. Regression test asserts `getall("genre")` through the real parse pipeline.
+- [x] **Rename Deezer-specific ID tags to the `{provider}_{type}_{id}_id` convention**: `deezer_albumid` → `deezer_album_id` (post-parse stamp, cover-art lookup, search dialog), `deezer_trackid` → `deezer_track_id` (processor, node key), `deezer_albumartistid` → `deezer_albumartist_id` (search rows). Future providers inherit the convention (`spotify_album_id`, …).
+- [x] **Document list serialization**: [../reference/multi-value-tags.md](../reference/multi-value-tags.md) — internal list representation, `MULTI_VALUED_JOINER` display form vs. `getall()`, and per-format file behavior (ID3v2.4 null-separated frames, ID3v2.3 `id3v23_join_with` joining, MP4 list/int atoms, repeated Vorbis comments, ASF/APE).

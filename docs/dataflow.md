@@ -39,7 +39,7 @@ Two entry points converge on the same dialog:
 ## 2. Search
 
 1. `DeezerAPIHelper.search_albums()` issues `GET /search/album` with `q`, `index`, `limit` (page size 25). The query is either passed through (advanced syntax) or quote-stripped (`escape_deezer_query()`); cluster queries are assembled by `build_deezer_query()` into `artist:"…" album:"…"`.
-2. `handle_reply()` reads `data` and `total`; each album node is converted by `albumsearch_to_metadata()` into display metadata: `album` (title), `tracks` (`nb_tracks`), `albumartist` / `deezer_albumartistid`, `deezer_albumid`, and `source = "Deezer"`.
+2. `handle_reply()` reads `data` and `total`; each album node is converted by `albumsearch_to_metadata()` into display metadata: `album` (title), `tracks` (`nb_tracks`), `albumartist` / `deezer_albumartist_id`, `deezer_album_id`, and `source = "Deezer"`.
 3. Results render in columns Name / Artist / Tracks / Source / ID / Cover. Thumbnails (size `medium`) are fetched lazily for visible cells only and cached in a class-level `_cover_cache` keyed by Deezer album ID, so scrolling, re-sorting and pagination do not re-download.
 4. **Load More** advances `index` by the page limit and re-issues the same query; the button label shows `loaded/total`. Re-searching resets state (`fetch_cleanup()` aborts pending thumbnail tasks).
 
@@ -65,14 +65,14 @@ Two entry points converge on the same dialog:
 
 1. `album_to_mb_release(document, provider)` builds the synthetic release node:
    - synthetic `id`, hardcoded `status: "Official"`;
-   - field map `_ALBUM_TO_MB_RELEASE`: `id → deezer_albumid`, `upc → barcode`, `release_date → date`, `title → title` (empty values skipped via `mbjson._node_skip_empty_iter`);
+   - field map `_ALBUM_TO_MB_RELEASE`: `id → deezer_album_id`, `upc → barcode`, `release_date → date`, `title → title` (empty values skipped via `mbjson._node_skip_empty_iter`);
    - `artist-credit` from `contributors` (falling back to `artist`) with computed joinphrases (`", "` between, `" & "` before the last) and synthetic artist UUIDs;
    - `label-info` with the label **name only** (no catalog number, no label UUID — core reads nothing else);
    - `genres` as `[{name, count: 1}]`;
    - `release-group` subnode with synthetic RG UUID, shared artist-credit, title, `primary-type` from `record_type` (capitalized);
    - empty `media: []` prepared for the track fan-out.
 2. The node is parked on the album as the transient `album.metastreaming_mb_node`.
-3. **Parallel track fan-out**: for every `document["tracks"]["data"]` entry, `_request_track()` queues a *separate album task* (`{provider}_track_{id}`, blocking) calling `GET /track/{id}`. Picard's network queue runs these concurrently, bounded by the plugin's `rate_limit_ms` floor for `api.deezer.com`. If the album response has no track list, the release is finished immediately.
+3. **Parallel track fan-out**: for every `document["tracks"]["data"]` entry, `_request_track()` queues a *separate album task* (`{provider}_track_{id}`, blocking) calling `GET /track/{id}`. Picard's network queue runs these concurrently, bounded by the plugin's `rate_limit_ms` floor for `api.deezer.com`. The fan-out is kept (rather than a single `GET /album/{id}/tracks`) because only the full track object carries `contributors` — accurate artist-credit for featuring tracks; see [design/track-response-analysis.md](design/track-response-analysis.md). If the album response has no track list, the release is finished immediately.
 
 ## 5. Track responses → media assembly
 
@@ -81,12 +81,12 @@ Each `GET /track/{id}` response lands in `_track_request_finished()`:
 1. `complete_album_task()` marks the task done.
 2. On error — or if the album node has vanished (e.g. the album was reset meanwhile) — the album's tasks are cancelled and the release is finished with the error.
 3. `_mb_track_from_track()` converts the track JSON into a MusicBrainz-shaped **track node**:
-   - synthetic `id` (uuid5 track namespace), `deezer_trackid` kept for round-tripping, `title`;
+   - synthetic `id` (uuid5 track namespace), `deezer_track_id` kept for round-tripping, `title`;
    - `length` = Deezer seconds × 1000;
    - `position` / `number` from `track_position`;
    - `artist-credit` from `contributors` (or `artist`);
    - a **`recording` sub-node copied from the track** (`dict(track)`), so it inherits the same synthetic UUID — this is why no separate recording namespace exists. The recording additionally carries `isrcs` (from `isrc`), the same artist-credit, and the `relations: []` sentinel (prevents real-MB recording lookups on synthetic IDs — see [architecture.md](architecture.md) §3);
-   - `explicit` flag when `tag_explicit` is enabled (core ignores the node key; the planned Stage 8 processor will materialize the regular `explicit` tag — see [design/explicit-tag-analysis.md](design/explicit-tag-analysis.md)).
+   - `explicit` flag when `tag_explicit` is enabled (core ignores the node key; the Stage 8 processor materializes it as the regular `explicit` tag together with `deezer_track_id` provenance — see [design/explicit-tag-analysis.md](design/explicit-tag-analysis.md)).
 4. The track node is slotted into `metastreaming_mb_node["media"][disk_index]["tracks"][track_index]` (0-based `disk_number - 1` / `track_position - 1`), growing the `media` list with `{"position", "format": "Digital Media", "track-count": 0, "tracks": []}` mediums and padding with empty dicts as needed; `track-count` is refreshed.
 5. **Completion**: when `not album.has_critical_tasks()` — i.e. the last in-flight track task finished — `_finish_deezer_release(album, metastreaming_mb_node, …)` runs.
 
@@ -94,7 +94,7 @@ Each `GET /track/{id}` response lands in `_track_request_finished()`:
 
 `_finish_deezer_release(album, mb_document, http, error)`:
 
-1. `_parse_release(mb_document)` — **the native Picard entry point** (`picard/album.py`). It stores the raw node as `_release_node` and runs the standard `mbjson` parsers:
+1. `_parse_release(mb_document)` — **the native Picard entry point** (`picard/album.py`). It stores the raw node as `_release_node` and runs the standard `mbjson` parsers, which invoke the plugin's track metadata processor per track (`run_track_metadata_processors` → `deezerjson.track_metadata_processor`): it promotes `deezer_track_id` (per-track provenance), `bpm` (standard tag, when Deezer reports `> 0`), and — when the `tag_explicit` option is enabled — `explicit = "1"` from the synthetic node into the final track metadata (see [design/explicit-tag-analysis.md](design/explicit-tag-analysis.md) and [design/track-response-analysis.md](design/track-response-analysis.md)):
    - `PARSED` → the plugin stamps `album._new_metadata[f"{provider}_albumid"] = actual_id` (provenance tag, used by cover art and session round-trips), then `_run_album_metadata_processors()`, then `_finalize_loading(error=False)`.
    - `REDIRECT` → treated as success-with-error-reset.
    - Any exception → `album.error_append(traceback)` and a failed finalize.

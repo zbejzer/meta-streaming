@@ -10,18 +10,18 @@ Verified against Picard 3.0.2 source (`picard/mbjson.py`, `picard/album.py`, `pi
 
 | Deezer field | Classification | Resulting tag / note |
 | :-- | :-- | :-- |
-| `id` | mapped & consumed | → synthetic release MBID → `deezer_albumid`, `musicbrainz_albumid` |
+| `id` | mapped & consumed | → synthetic release MBID → `deezer_album_id`, `musicbrainz_albumid` |
 | `title` | mapped & consumed | `title`, plus `release-group.title` |
 | `upc` | mapped & consumed | `barcode` |
 | `release_date` | mapped & consumed | `date` |
 | `label` | mapped & consumed (name only) | `label`; **`id` inside the label node was mapped but has zero consumers** — `label_info_from_node()` reads only `name` / `catalog-number`; no `musicbrainz_labelid` tag exists. Removed by the minimization. |
-| `genres.data[].name` | mapped & consumed | `genre` / `~genres` (Picard reads only `name` and `count`; `genres[].id` is never consumed, even from genuine MB responses) |
+| `genres.data[].name` | mapped & consumed | `genre` / `~genres` (Picard reads only `name` and `count`; the node emits `count: 100` so the list passes the default `min_genre_usage` filter — Stage 9; `genres[].id` is never consumed, even from genuine MB responses) |
 | `record_type` | mapped & consumed | `release-group.primary-type` → `releasetype` |
 | `contributors` / `artist` | mapped & consumed | `artist-credit` (roles flattened; joinphrase computed by the plugin) |
 | `tracks.data` | mapped & consumed | drives per-track detail requests → `media[].tracks[]` |
 | `asin` (hardcoded `None`) | mapped but ignored | falsy → skipped by `_node_skip_empty_iter()`; **removable dead weight** |
 | `status` (hardcoded `"Official"`) | mapped & consumed | `releasestatus` |
-| `cover_*`, `md5_image` | dropped | not carried on the node; artwork is delivered by the native `UrlRelationships` provider through an injected `cover art link` URL relation (Stage 6, planned — previously handled by the now-removed-from-plan `DeezerCoverArtProvider` via `deezer_albumid`) |
+| `cover_*`, `md5_image` | dropped | not carried on the node; artwork is delivered by the native `UrlRelationships` provider through an injected `cover art link` URL relation (Stage 6, planned — previously handled by the now-removed-from-plan `DeezerCoverArtProvider` via `deezer_album_id`) |
 | `fans`, `available`, `nb_tracks`, `explicit_content_cover`, `explicit_content_lyrics`, `explicit_lyrics`, `link`, `share`, `tracklist`, `type`, `genre_id` | dropped | consumed by the search dialog or ignored; nothing in `mbjson.py` reads them |
 
 ### Track node (`_mb_track_from_track()`)
@@ -29,13 +29,13 @@ Verified against Picard 3.0.2 source (`picard/mbjson.py`, `picard/album.py`, `pi
 | Deezer / synthetic key | Classification | Resulting tag / note |
 | :-- | :-- | :-- |
 | `id` | mapped & consumed | synthetic track MBID → `musicbrainz_trackid` (TracksCache matching); recording node inherits it (`recording.id`) → `musicbrainz_recordingid` |
-| `title` (*→ `deezer_trackid`, kept for round-tripping*) | mapped & consumed | `deezer_trackid` preserved on the node |
+| `id` (*→ `deezer_track_id`, provenance*) | mapped & consumed | `deezer_track_id` preserved on the node and promoted to track metadata (and files, freeform) by the Stage 8 processor |
 | `duration` | mapped & consumed | `length` (×1000 to ms) → `~length` |
 | `track_position` | mapped & consumed | `position` / `number` → `tracknumber` |
 | `disk_number` | mapped & consumed | drives `media[]` disc grouping → `discnumber` / `totaldiscs` |
 | `contributors` / `artist` | mapped & consumed | track `artist-credit` → `artist`, `artists` |
 | `isrc` | mapped & consumed | `recording.isrcs`  → `isrc` |
-| `explicit` (`explicit_lyrics`) | **mapped; to be surfaced via processor** | `track_to_metadata()` has no `explicit` branch, so the node key alone never passes through — the planned track metadata processor (roadmap Stage 8) sets the regular `metadata["explicit"] = "1"` tag. Decision record: [explicit-tag-analysis.md](explicit-tag-analysis.md) — user-visible tag that flows through the UI, scripts, and Picard's native freeform file writes (`TXXX:explicit` ID3, `----:com.apple.iTunes:explicit` MP4, `EXPLICIT` Vorbis); dropped on WMA/ASF; granular `explicit_content_*` scale stays dropped. |
+| `explicit` (`explicit_lyrics`) | **mapped; surfaced via processor** | `track_to_metadata()` has no `explicit` branch, so the node key alone never passes through — the Stage 8 track metadata processor sets the regular `metadata["explicit"] = "1"` tag. Decision record: [explicit-tag-analysis.md](explicit-tag-analysis.md) — user-visible tag flowing through the UI, scripts, and Picard's native freeform file writes (`TXXX:explicit` ID3, `----:com.apple.iTunes:explicit` MP4, `EXPLICIT` Vorbis); dropped on WMA/ASF; granular `explicit_content_*` scale stays dropped. |
 | `recording.relations = []` | kept (not dead weight) | **Functionally required:** with "use track relationships" enabled, `_needs_track_relationships()` returns `MISSING_TRACK_RELS` when the key is absent, triggering real MB recording lookups that 404 on synthetic IDs. |
 | `title_short`, `title_version`, `rank`, `preview`, `readable` | dropped | not represented in the synthetic node; nothing in `mbjson.py` consumes them |
 | `explicit_content_cover`, `explicit_content_lyrics` (per-track) | dropped | only the boolean `explicit_lyrics` is ever consulted |
