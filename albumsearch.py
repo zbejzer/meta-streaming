@@ -51,7 +51,7 @@ class StreamingAlbumSearchDialog(SearchDialog):
                 Column(N_("Artist"), "albumartist"),
                 Column(N_("Tracks"), "tracks", sort_type=ColumnSortType.NAT, align=ColumnAlign.RIGHT),
                 Column(N_("Source"), "source"),
-                Column(N_("ID"), "deezer_albumid", sort_type=ColumnSortType.NAT, align=ColumnAlign.RIGHT),
+                Column(N_("ID"), "deezer_album_id", sort_type=ColumnSortType.NAT, align=ColumnAlign.RIGHT),
                 CoverColumn(N_("Cover"), "cover", width=100),
             ),
             default_width=100,
@@ -272,14 +272,14 @@ class StreamingAlbumSearchDialog(SearchDialog):
                             self.table,
                             row,
                             pos,
-                            release["deezer_albumid"],
+                            release["deezer_album_id"],
                             cover_size,
                             on_show=self.fetch_coverart,
                         )
                     )
                 else:
                     self.set_table_item_value(row, pos, c, release)
-        self.show_table(sort_column="deezer_albumid")
+        self.show_table(sort_column="deezer_album_id")
 
     def accept_event(self, rows):
         for row in rows:
@@ -287,6 +287,6 @@ class StreamingAlbumSearchDialog(SearchDialog):
 
     def load_selection(self, row):
         release: Metadata = self.search_results[row]
-        deezer_id = str(release["deezer_albumid"])
+        deezer_id = str(release["deezer_album_id"])
         api = PluginApi.get_api()
         load_deezer_album(api, deezer_id, cluster=self.cluster)

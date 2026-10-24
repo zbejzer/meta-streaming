@@ -16,7 +16,7 @@ class StreamingCoverArtProvider(CoverArtProvider):
     provider: Provider = Provider.DEEZER
 
     def queue_images(self):
-        item_id = self.metadata.get(f"{self.provider.value}_albumid")
+        item_id = self.metadata.get(f"{self.provider.value}_album_id")
         if not item_id:
             return CoverArtProvider.QueueState.FINISHED
 

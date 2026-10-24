@@ -58,7 +58,7 @@ class StreamingOptionsPage(OptionsPage):
         # Tagging Group
         tag_group = QtWidgets.QGroupBox(_("Tagging Settings"), self)
         tag_layout = QtWidgets.QVBoxLayout(tag_group)
-        self.explicit_checkbox = QtWidgets.QCheckBox(_("Tag explicit tracks (~explicit)"), tag_group)
+        self.explicit_checkbox = QtWidgets.QCheckBox(_("Tag explicit tracks (explicit)"), tag_group)
         tag_layout.addWidget(self.explicit_checkbox)
         layout.addWidget(tag_group)
 

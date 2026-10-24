@@ -33,6 +33,7 @@ from picard.webservice import ratecontrol
 
 from .albumsearch import StreamingAlbumSearchDialog
 from .coverart import DeezerCoverArtProvider
+from .deezerjson import track_metadata_processor
 from .options import StreamingOptionsPage
 
 
@@ -72,7 +73,7 @@ def enable(api: PluginApi):
     api.plugin_config.register_option(
         "tag_explicit",
         True,
-        title="Tag explicit tracks (~explicit)",
+        title="Tag explicit tracks (explicit)",
         in_profile=True,
     )
 
@@ -84,5 +85,6 @@ def enable(api: PluginApi):
         QtCore.QByteArray(),
     )
     api.register_cluster_action(GetMetaStreaming)
+    api.register_track_metadata_processor(track_metadata_processor)
     api.register_cover_art_provider(DeezerCoverArtProvider)
     api.register_options_page(StreamingOptionsPage)

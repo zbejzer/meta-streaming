@@ -9,6 +9,7 @@ from picard.plugin3.api import (
     Album,
     Metadata,
     PluginApi,
+    Track,
 )
 
 from .api_helpers import (
@@ -21,12 +22,13 @@ from .providers import (
 
 
 _TRACK_TO_MB_TRACK: dict[str, str] = {
-    "id": "deezer_trackid",
+    "id": "deezer_track_id",
     "title": "title",
+    "bpm": "bpm",
 }
 
 _ALBUM_TO_MB_RELEASE: dict[str, str] = {
-    "id": "deezer_albumid",
+    "id": "deezer_album_id",
     "upc": "barcode",
     "release_date": "date",
     "title": "title",
@@ -87,6 +89,37 @@ def _mb_track_from_track(node: dict, provider: MetadataProvider, api: PluginApi)
     return track
 
 
+def track_metadata_processor(
+    api: PluginApi, track: Track, metadata: Metadata, track_node: dict, release_node: dict | None = None
+):
+    """Promote provider-specific synthetic node keys into final track metadata.
+
+    Promotes keys that carry information with no counterpart in the core
+    node-to-metadata translation but genuine value for the tagged files:
+
+    - ``deezer_track_id``: per-track provenance, the counterpart of the
+      album-level ``deezer_album_id`` stamped after parsing. Enables
+      re-lookup of the exact streaming track.
+    - ``explicit``: content advisory from Deezer's ``explicit_lyrics``,
+      written as a regular freeform tag through Picard's native save path.
+    - ``bpm``: beats per minute from Deezer's algorithmic analysis,
+      written to the standard ``bpm`` tag (``TBPM``/``tmpo``); only
+      present on the node when Deezer reports a value greater than 0.
+
+    Only synthetic nodes built by this plugin carry these keys, so the
+    processor is a no-op for genuine MusicBrainz albums. The ``explicit``
+    promotion is gated on the ``tag_explicit`` option at parse time, so it
+    also stays off for session-restored nodes parsed after the option was
+    disabled.
+    """
+    if deezer_track_id := track_node.get("deezer_track_id"):
+        metadata["deezer_track_id"] = str(deezer_track_id)
+    if bpm := track_node.get("bpm"):
+        metadata["bpm"] = str(int(bpm)) if float(bpm).is_integer() else str(bpm)
+    if api.plugin_config["tag_explicit"] and track_node.get("explicit"):
+        metadata["explicit"] = "1"
+
+
 def album_to_mb_release(node: dict, provider: MetadataProvider):
     """Create MusicBrainzAPI 'release' node from a Deezer JSON 'album' node."""
     mb_node: dict = dict()
@@ -115,9 +148,14 @@ def album_to_mb_release(node: dict, provider: MetadataProvider):
     else:
         mb_node["label-info"] = []
 
-    # Map genres if present
+    # Map genres if present. The count is set to the maximum allowed by
+    # Picard's "Minimal genre usage" option (bounds 0-100) so the Deezer
+    # genre list passes Track._genres_to_metadata's usage filter (default
+    # 90) and materializes as the multi-value "genre" tag; all counts are
+    # equal, so the materialized list is ordered alphabetically and capped
+    # by the "Maximum number of genres" option.
     try:
-        mb_node["genres"] = [{"name": g["name"], "count": 1} for g in node["genres"]["data"] if "name" in g]
+        mb_node["genres"] = [{"name": g["name"], "count": 100} for g in node["genres"]["data"] if "name" in g]
     except (KeyError, TypeError):
         pass
 
@@ -156,7 +194,7 @@ def _finish_deezer_release(album: Album, mb_document: dict | None, http, error) 
                 if parse_result == ParseResult.PARSED:
                     provider_attr = getattr(album, "metastreaming_provider", None)
                     if provider_attr:
-                        album._new_metadata[f"{provider_attr.provider.value}_albumid"] = provider_attr.actual_id
+                        album._new_metadata[f"{provider_attr.provider.value}_album_id"] = provider_attr.actual_id
                     album._run_album_metadata_processors()
                 elif parse_result == ParseResult.REDIRECT:
                     error = False
@@ -255,11 +293,11 @@ def recordings_request_finished_proxy(api: PluginApi, album: Album, task_id: str
 
 def albumsearch_to_metadata(node, m: Metadata, album=None) -> None:
     """Make metadata dict from a Deezer JSON 'album' node returned by search."""
-    m.add_unique("deezer_albumid", node["id"])
+    m.add_unique("deezer_album_id", node["id"])
     m["source"] = "Deezer"
     for key, value in _node_skip_empty_iter(node):
         if key in _ALBUMSEARCH_TO_METADATA:
             m[_ALBUMSEARCH_TO_METADATA[key]] = value
         elif key == "artist":
-            m["deezer_albumartistid"] = value["id"]
+            m["deezer_albumartist_id"] = value["id"]
             m["albumartist"] = value["name"]
