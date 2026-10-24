@@ -18,9 +18,7 @@ class EntityType(StrEnum):
     RELEASE = "release"
     RELEASE_GROUP = "release_group"
     ARTIST = "artist"
-    LABEL = "label"
     TRACK = "track"
-    RECORDING = "recording"
 
 
 # Pregenerated root base UUID for each metadata provider.
@@ -73,11 +71,5 @@ class MetadataProvider:
     def generate_artist_UUID(self, item_id: str | int | None = None) -> UUID:
         return self.generate_uuid(EntityType.ARTIST, item_id)
 
-    def generate_label_UUID(self, item_id: str | int | None = None) -> UUID:
-        return self.generate_uuid(EntityType.LABEL, item_id)
-
     def generate_track_UUID(self, item_id: str | int | None = None) -> UUID:
         return self.generate_uuid(EntityType.TRACK, item_id)
-
-    def generate_recording_UUID(self, item_id: str | int | None = None) -> UUID:
-        return self.generate_uuid(EntityType.RECORDING, item_id)

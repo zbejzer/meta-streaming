@@ -91,7 +91,6 @@ def album_to_mb_release(node: dict, provider: MetadataProvider):
     """Create MusicBrainzAPI 'release' node from a Deezer JSON 'album' node."""
     mb_node: dict = dict()
     mb_node["id"] = str(provider.generate_release_UUID())
-    mb_node["asin"] = None
     mb_node["status"] = "Official"
 
     for key, value in _node_skip_empty_iter(node):
@@ -102,13 +101,14 @@ def album_to_mb_release(node: dict, provider: MetadataProvider):
     mb_node["artist-credit"] = _artist_credit_from_contributors(contributors, provider)
 
     if label_name := node.get("label"):
+        # Picard consumes only the label name (label_info_from_node), no
+        # musicbrainz_labelid tag exists, so no synthetic label UUID is generated.
         mb_node["label-info"] = [
             {
                 "catalog-number": None,
                 "label": {
                     "name": label_name,
                     "sort-name": label_name,
-                    "id": str(provider.generate_label_UUID(label_name)),
                 },
             }
         ]
