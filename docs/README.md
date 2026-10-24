@@ -27,6 +27,7 @@ It achieves this with a **Synthetic MusicBrainz Adapter**: Deezer JSON responses
 | :-- | :-- |
 | [roadmap.md](roadmap.md) | Development roadmap: completed stages 1–5 and planned stages 6–7 |
 | [design/cover-art-piggyback-mechanism.md](design/cover-art-piggyback-mechanism.md) | Stage 6 design record: why delivering cover art via an injected `cover art link` URL relation through the native `UrlRelationships` provider works |
+| [design/explicit-tag-analysis.md](design/explicit-tag-analysis.md) | Decision record: the Deezer explicit flag is materialized as the user-visible `explicit` tag (freeform-written via Picard's native path), not an internal variable |
 | [design/musicbrainz-deezer-mapping.md](design/musicbrainz-deezer-mapping.md) | Verified field-level audit: every Deezer field vs. the synthetic node vs. what Picard actually consumes |
 
 ### Reference

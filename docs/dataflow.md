@@ -86,7 +86,7 @@ Each `GET /track/{id}` response lands in `_track_request_finished()`:
    - `position` / `number` from `track_position`;
    - `artist-credit` from `contributors` (or `artist`);
    - a **`recording` sub-node copied from the track** (`dict(track)`), so it inherits the same synthetic UUID — this is why no separate recording namespace exists. The recording additionally carries `isrcs` (from `isrc`), the same artist-credit, and the `relations: []` sentinel (prevents real-MB recording lookups on synthetic IDs — see [architecture.md](architecture.md) §3);
-   - `explicit` flag when `tag_explicit` is enabled (note: core currently ignores it — see [limitations.md](limitations.md)).
+   - `explicit` flag when `tag_explicit` is enabled (core ignores the node key; the planned Stage 8 processor will materialize the regular `explicit` tag — see [design/explicit-tag-analysis.md](design/explicit-tag-analysis.md)).
 4. The track node is slotted into `metastreaming_mb_node["media"][disk_index]["tracks"][track_index]` (0-based `disk_number - 1` / `track_position - 1`), growing the `media` list with `{"position", "format": "Digital Media", "track-count": 0, "tracks": []}` mediums and padding with empty dicts as needed; `track-count` is refreshed.
 5. **Completion**: when `not album.has_critical_tasks()` — i.e. the last in-flight track task finished — `_finish_deezer_release(album, metastreaming_mb_node, …)` runs.
 

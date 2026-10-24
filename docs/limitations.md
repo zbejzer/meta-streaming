@@ -21,9 +21,9 @@ The custom `DeezerCoverArtProvider` is unknown to Picard's default `ca_providers
 
 Stage 6 (planned) removes the custom provider and delivers artwork through the native, default-enabled **UrlRelationships** ("Allowed Cover Art URLs") provider by injecting a `cover art link` URL relation into the synthetic release node — no user action required. Full mechanism proof: [design/cover-art-piggyback-mechanism.md](design/cover-art-piggyback-mechanism.md). Caveat that will remain: users who disabled "Allowed Cover Art URLs" get no Deezer artwork (an explicit user choice, same as for MusicBrainz releases).
 
-## 3. `tag_explicit` option is currently ineffective
+## 3. `tag_explicit` has no visible effect (until Stage 8)
 
-The option (title "Tag explicit tracks (~explicit)") sets `track["explicit"]` on the synthetic node, but Picard's `track_to_metadata()` ignores that key and `~explicit` does not exist anywhere in Picard core — so no explicit tag is ever written. This is a documented option-title mismatch (Stage 5, deferred by decision): resolving it means either a track metadata processor materializing `~explicit`, or an option-title rewrite. Details: [configuration.md](configuration.md) and the [mapping report](design/musicbrainz-deezer-mapping.md).
+The option (title "Tag explicit tracks (~explicit)") sets `track["explicit"]` on the synthetic node, but Picard's `track_to_metadata()` ignores that node key — so no explicit indication reaches metadata or files today. A bridge into `Metadata` is required regardless of the tag name chosen. This is resolved by analysis ([explicit-tag-analysis.md](design/explicit-tag-analysis.md)): the flag will be materialized as the regular, user-visible `explicit` tag via a track metadata processor (planned [roadmap Stage 8](roadmap.md)) — editable in the metadata box, scriptable as `%explicit%`, and written through Picard's native freeform path (`TXXX:explicit` on ID3, `----:com.apple.iTunes:explicit` on MP4, `EXPLICIT` on Vorbis, freeform on APEv2 and WAV's ID3 chunk). WMA (ASF) will not carry it — Picard's ASF writer is restricted to known `WM/…` names (`asf.py:331`). Until Stage 8 lands, the option has no effect. Details: [configuration.md](configuration.md) and the [mapping report](design/musicbrainz-deezer-mapping.md).
 
 ## 4. Metadata fidelity differences vs. MusicBrainz
 

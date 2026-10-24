@@ -97,5 +97,5 @@ These tags are only available in iTunes files and are not able to be populated b
 ## Relevance to this plugin
 
 - The synthetic release node targets exactly the MBID tags above: `musicbrainz_albumid`, `musicbrainz_albumartistid` / `musicbrainz_artistid`, `musicbrainz_releasegroupid`, `musicbrainz_trackid`, and `musicbrainz_recordingid` — plus `releasestatus`, `releasetype`, `barcode`, `date`, `label`, `isrc`, `discnumber` / `totaldiscs`, `tracknumber` / `totaltracks`, `media`, and `genre`. The full field trace is in the [mapping audit](../../design/musicbrainz-deezer-mapping.md).
-- `~explicit` is **not** among Picard's tags — consistent with the documented `tag_explicit` option mismatch (see [limitations](../../limitations.md)).
+- `~explicit` is **not** among Picard's tags. The plugin's `tag_explicit` option will instead materialize a regular `explicit` tag via a track metadata processor (decision record: [../../design/explicit-tag-analysis.md](../../design/explicit-tag-analysis.md)) — regular-named tags are written through Picard's native freeform path, exactly like tags added with the metadata box's "Add New Tag…".
 - The plugin's `recording.relations = []` sentinel interacts with the "Use track relationships" setting that produces the [advanced tags](advanced-tags.md).

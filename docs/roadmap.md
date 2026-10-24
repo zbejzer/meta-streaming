@@ -47,7 +47,7 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 - [x] **Enhanced Schema Mapping**:
   - Mapped genres (`genres.data[*].name`) to `genre` / `~genres`.
   - Mapped `record_type` (`album`, `single`, `ep`) to `primary-type` / `releasetype`.
-  - Mapped explicit content tags (`~explicit = '1'`) based on `explicit_lyrics`. *(Superseded by the Stage 5 audit: this never reached metadata — the node sets `track["explicit"]`, which `track_to_metadata()` ignores, and `~explicit` does not exist in core. See Stage 5 "Fix the `~explicit` Option Title Mismatch".)*
+  - Mapped explicit content tags (`~explicit = '1'`) based on `explicit_lyrics`. *(Superseded by the Stage 5 audit: this never reached metadata — the node sets `track["explicit"]`, which `track_to_metadata()` ignores. Resolution decision in [Stage 5](#stage-5-mapping-audit--mbid-minimization) and [`docs/design/explicit-tag-analysis.md`](design/explicit-tag-analysis.md): the regular `explicit` tag will be materialized via a track metadata processor; implementation planned as [Stage 8](#stage-8-explicit-track-metadata-processor-planned).)*
   - Included ISRCs on tracks and recordings.
   - Populated multi-disc attributes (`position`, `track-count`, `format`, `discnumber`, `totaldiscs`).
 
@@ -119,7 +119,7 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
   - Every synthetic node key produced by `album_to_mb_release()`, `_mb_track_from_track()` and `_artist_credit_from_contributors()` (`deezerjson.py`) cross-checked against what Picard actually consumes in `picard/mbjson.py` (`release_to_metadata`, `release_group_to_metadata`, `track_to_metadata`, `recording_to_metadata`, `medium_to_metadata`, `artist_credit_to_metadata`, `label_info_from_node`, `add_genres_from_node`, `add_isrcs_to_metadata`) — with the hard dictionary accesses in `picard/album.py` verified as well.
   - Synthetic node shape compared against the genuine MusicBrainz release response (`album_mb.json`): Picard consumes none of `genres[].id` / `media[].id` / `label-info[].label.id` even from genuine responses, so these never need synthetic equivalents.
   - Suspects resolved:
-    - `explicit` on track nodes → **mapped but ignored**: `track_to_metadata()` has no `explicit` branch; `~explicit` does not exist anywhere in Picard core. The `tag_explicit` option title "Tag explicit tracks (~explicit)" currently promises a tag the pipeline never produces; materializing it requires a track metadata processor.
+    - `explicit` on track nodes → **mapped; to be surfaced via processor**: `track_to_metadata()` has no `explicit` branch, so the node key alone never passes through. Resolved by analysis — a track metadata processor will set the regular `metadata["explicit"] = "1"` tag from the node flag ([Stage 8](#stage-8-explicit-track-metadata-processor-planned), decision in [`docs/design/explicit-tag-analysis.md`](design/explicit-tag-analysis.md)); it then flows through the UI, scripts, and Picard's native freeform file writes.
     - `asin: None` → **mapped but ignored**: falsy, skipped by `_node_skip_empty_iter()` before mapping; removable.
     - `relations: []` on recording nodes → **NOT dead weight — functionally required**: `_needs_track_relationships()` (`picard/album.py`) returns `MISSING_TRACK_RELS` when the key is absent and "use track relationships" is enabled, which would trigger real MB recording lookups that 404 on synthetic IDs. Keep.
     - `status: "Official"` → mapped & consumed (`releasestatus`).
@@ -143,8 +143,9 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 - [x] **Apply Synthetic MBID Minimization** (done; verified against `album_dzr.json` through the real `mbjson` parsers):
   - Removed the label UUID generation in `album_to_mb_release()` (kept `label.name`), removed `generate_label_UUID` / `generate_recording_UUID` and `EntityType.LABEL` / `EntityType.RECORDING` from `providers.py`, removed the dead `asin` placeholder.
   - Verified the minimized node end-to-end: synthetic node generation against the real example JSON, `release_to_metadata()` album-level run (album/artist MBIDs, `label`, `releasestatus` all correct), and the `_setup_release_group()` sequence (`release_group_to_metadata` → metadata copy) for the RG UUID and `~primaryreleasetype`.
-- [ ] **Fix the `~explicit` Option Title Mismatch (deferred — document-only, per user decision)**:
-  - The `tag_explicit` option sets `track["explicit"]`, which `track_to_metadata()` ignores; `~explicit` never reaches metadata. Documented here and in `docs/design/musicbrainz-deezer-mapping.md`; no code change for now. If revisited: either a track metadata processor setting `metadata["~explicit"] = "1"` (test-first) or an option-title rewrite.
+- [x] **Resolve `~explicit` handling (analysis-based decision, resolved 2026-10)**:
+  - The `tag_explicit` option sets `track["explicit"]`, which `track_to_metadata()` ignores; the flag alone never reaches metadata — a bridge into `Metadata` is required regardless of tag name. Full analysis in [`docs/design/explicit-tag-analysis.md`](design/explicit-tag-analysis.md), based on the vendor reference fragments (Deezer field docs, Picard basic-tags, Mp3tag field mappings) and the format writers in `picard/formats/`: the Deezer flag is **valuable as track metadata** (MusicBrainz has no advisory data; it disambiguates explicit vs edited/clean release variants), and a **regular-named `explicit` tag does reach files** through Picard's native freeform path — the same path user-added tags ("Add New Tag…" in the metadata box) take (`TXXX:explicit` ID3, `----:com.apple.iTunes:explicit` MP4, `EXPLICIT` Vorbis, APEv2 freeform, WAV ID3 chunk; dropped on WMA/ASF by its `supports_tag` restriction).
+  - **Decision:** materialize `metadata["explicit"] = "1"` via a track metadata processor reading `track_node["explicit"]` — user-visible, editable in the metadata box, scriptable as `%explicit%`, written freeform. Option title's stale "(~explicit)" parenthetical becomes "(explicit)"; granular `explicit_content_*` scale stays dropped; no format-specific surgery (no `rtng` writing). Implementation planned as [Stage 8](#stage-8-explicit-track-metadata-processor-planned).
 - [x] **Cover Art Provider Enablement** (verified gap, **superseded by Stage 6**): `DeezerCoverArtProvider` registers as an *unknown* provider for `ca_providers` defaults → `enabled=False` (position 666) until manually enabled in **Options → Cover Art** — and until then no cover is fetched at all, while `CaaReleaseGroup` still fires one silently-swallowed 404 per album load. Rather than surfacing or auto-enabling it, Stage 6 removes the custom provider entirely and delivers the cover through the default-enabled `UrlRelationships` ("Allowed Cover Art URLs") provider instead.
 
 ---
@@ -185,3 +186,22 @@ Because Picard's domain model is built around MusicBrainz UUIDs and schemas, the
 - [ ] **RAM & UI State Preservation in Post-Save Processor**:
   - Register `register_file_post_save_processor(post_save_restore_synthetic_mbids)`.
   - Restore stashed synthetic MBIDs into `file.metadata` and `file.orig_metadata` so Picard's UI, album grouping, and status icons remain intact in RAM after file save without unsaved tag diffs.
+
+---
+
+### Stage 8: `explicit` Track Metadata Processor (Planned)
+
+> Decision record: [`explicit-tag-analysis.md`](design/explicit-tag-analysis.md) — why the Deezer explicit flag is materialized as the regular, user-visible `explicit` tag (editable in the metadata box, scriptable as `%explicit%`, written through Picard's native freeform path like any user-added tag) rather than an internal `~`-variable.
+
+- [ ] **Materialize `explicit` in track metadata**:
+  - Register a track metadata processor via `api.register_track_metadata_processor()` with signature `(api, track, metadata, track_node, release_node=None)` (`picard/plugin3/api_impl.py:892`).
+  - When `track_node.get("explicit")` is truthy (set by `_mb_track_from_track()` from `explicit_lyrics` under the `tag_explicit` option), set `metadata["explicit"] = "1"`; no-op otherwise (fresh `Metadata` per parse, no stale-value handling needed).
+  - The tag flows through the standard paths: metadata box (visible, editable, deletable per track), tagger scripts (`%explicit%`), and file writing via the native freeform fallbacks — `TXXX:explicit` (ID3v2), `----:com.apple.iTunes:explicit` (MP4), `EXPLICIT` (Vorbis comments), freeform APEv2 item, WAV ID3v2 chunk. Not written on WMA (ASF `supports_tag` restriction) — accepted, no plugin-side bypass.
+- [ ] **Option title fix**: change the checkbox title in `options.py` from "Tag explicit tracks (~explicit)" to "Tag explicit tracks (explicit)" (plain `_()` string; update the plugin translation key if one exists for it).
+- [ ] **Test-first implementation** (repository guideline):
+  - Write a unit test reproducing the gap: a synthetic node whose track carries `explicit: True` must produce track metadata with `explicit == "1"`; with `explicit` absent or `tag_explicit` disabled, no `explicit` key. Keep as a permanent regression test.
+- [ ] **Verification**:
+  - `release_to_metadata()` / `track_to_metadata()` output unchanged except the added `explicit` tag; no node mutation; no file-format code paths touched — the freeform writes are Picard's own.
+  - `explicit` is the plugin's only deliberate freeform tag; everything else stays inside Picard's tag mapping (tag-purity guarantee re-scoped in the decision record).
+  - Granular `explicit_content_lyrics` / `explicit_content_cover` remain dropped per the minimization audit.
+  - `ruff format` + `ruff check` on touched files.
