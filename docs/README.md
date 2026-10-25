@@ -41,6 +41,7 @@ It achieves this with a **Synthetic MusicBrainz Adapter**: Deezer JSON responses
 | [reference/deezer/album.md](reference/deezer/album.md) | Deezer API doc fragment: album object fields, related actions, connections |
 | [reference/deezer/track.md](reference/deezer/track.md) | Deezer API doc fragment: track object fields, actions, related actions |
 | [reference/deezer/genre.md](reference/deezer/genre.md) | Deezer API doc fragment: genre/editorial object fields, connections |
+| [reference/deezer/search.md](reference/deezer/search.md) | Deezer API doc fragment: search endpoints, optional parameters, advanced search |
 | [reference/multi-value-tags.md](reference/multi-value-tags.md) | Reference note: how multi-value (list) tags are written to files per format, vs. joined strings |
 | [reference/picard/basic-tags.md](reference/picard/basic-tags.md) | Picard doc fragment: basic tags (from MusicBrainz, plugin/script-populated, iTunes-specific) |
 | [reference/picard/advanced-tags.md](reference/picard/advanced-tags.md) | Picard doc fragment: advanced tags (track relationship and genre tags) |
